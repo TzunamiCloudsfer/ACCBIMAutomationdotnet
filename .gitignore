@@ -1,0 +1,20 @@
+# Build outputs
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Storage (auth cookies, user data — never commit)
+storage/
+
+# RavenDB topology files created at runtime
+*.raven-cluster-topology
+*.raven-database-topology
+
+# Playwright browser cache
+%LOCALAPPDATA%/ms-playwright/
+
+# OS
+Thumbs.db
+.DS_Store
