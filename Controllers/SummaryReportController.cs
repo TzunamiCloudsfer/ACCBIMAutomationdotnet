@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -15,7 +15,7 @@ namespace AutodeskAutomation.Controllers
         private readonly DatabaseService _db = DatabaseService.Instance;
         private readonly ServerState _srv = ServerState.Instance;
 
-        // ── List all captured reports ─────────────────────────────────────────────
+        //  List all captured reports ─────────────────────────────────────────────
         [HttpGet, Route("reports")]
         public IHttpActionResult GetReports(
             string? platform = null, string? status = null,
@@ -38,7 +38,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { reports = reports.Select(ToDto), total = reports.Count });
         }
 
-        // ── List report runs (one per project export) ─────────────────────────────
+        //  List report runs (one per project export) ─────────────────────────────
         [HttpGet, Route("runs")]
         public IHttpActionResult GetRuns(string? platform = null, int limit = 50)
         {
@@ -53,7 +53,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { runs = runs.Select(RunToDto) });
         }
 
-        // ── Single report run + its captured reports ──────────────────────────────
+        //  Single report run + its captured reports ──────────────────────────────
         [HttpGet, Route("runs/{runId}")]
         public IHttpActionResult GetRun(string runId)
         {
@@ -67,7 +67,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { run = RunToDto(run), reports = reports.Select(ToDto) });
         }
 
-        // ── Download redirect for a completed report ──────────────────────────────
+        //  Download redirect for a completed report ──────────────────────────────
         [HttpGet, Route("reports/{reportId}/download")]
         public HttpResponseMessage Download(string reportId)
         {
@@ -84,7 +84,7 @@ namespace AutodeskAutomation.Controllers
             return response;
         }
 
-        // ── CSV export of all captured reports ────────────────────────────────────
+        //  CSV export of all captured reports ────────────────────────────────────
         [HttpGet, Route("csv")]
         public HttpResponseMessage GetCsv(string? platform = null, string? batchRunId = null)
         {
@@ -118,7 +118,7 @@ namespace AutodeskAutomation.Controllers
             return response;
         }
 
-        // ── DTO helpers ───────────────────────────────────────────────────────────
+        //  DTO helpers ───────────────────────────────────────────────────────────
         private static object ToDto(ReportDocument r) => new
         {
             id            = r.ReportId,

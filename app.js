@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ═══════════════════════════════════════════════════════════════════════════
    Autodesk Automation Platform — Unified Client Application
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -371,7 +371,7 @@ function handleEvent(type, data) {
       }
       refreshPlatformStats(); // update pending counts in platform tab
       // Reload project list so status changes to "completed" are visible
-      if (A.page === 'projects') loadProjects();
+      loadProjects(); // refresh regardless of current page
       if (isCurrentPlatform) {
         A.exportStatus = 'complete'; A.exportPaused = false;
         A.results = { ...data.results };

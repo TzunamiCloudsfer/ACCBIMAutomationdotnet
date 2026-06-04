@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -18,7 +18,7 @@ namespace AutodeskAutomation.Controllers
         private readonly ServerState _srv = ServerState.Instance;
         private readonly SseService _sse = SseService.Instance;
 
-        // ── Projects ──────────────────────────────────────────────────────────────
+        //  Projects ──────────────────────────────────────────────────────────────
         [HttpGet, Route("projects")]
         public IHttpActionResult GetProjects()
         {
@@ -86,7 +86,7 @@ namespace AutodeskAutomation.Controllers
             return response;
         }
 
-        // ── Checkpoint ────────────────────────────────────────────────────────────
+        //  Checkpoint ────────────────────────────────────────────────────────────
         // Force-reset the running flag if a previous export crashed without cleanup
         [HttpPost, Route("export/reset")]
         public IHttpActionResult ResetExportState()
@@ -115,11 +115,11 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "ok", reset = body.ProjectIds.Count });
         }
 
-        // ── Export ────────────────────────────────────────────────────────────────
+        //  Export ────────────────────────────────────────────────────────────────
         [HttpPost, Route("export/start")]
         public async Task<HttpResponseMessage> StartExport([FromBody] ExportRequest body)
         {
-            // Auto-reset a stuck export flag — if nothing is actually running
+            // Auto-reset a stuck export flag -- if nothing is actually running
             // (no SSE clients active, or flag left over from a crashed previous run)
             // allow starting fresh instead of blocking forever.
             if (_srv.Bim360Running)
@@ -191,7 +191,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "resumed" });
         }
 
-        // ── Reports ───────────────────────────────────────────────────────────────
+        //  Reports ───────────────────────────────────────────────────────────────
         [HttpGet, Route("reports")]
         public IHttpActionResult GetReports()
             => Ok(new { reports = _db.GetRuns(_srv.ActiveUser, "bim360").Select(RunToReport) });
@@ -214,7 +214,7 @@ namespace AutodeskAutomation.Controllers
             _db.DeleteRun(id); return Ok(new { status = "deleted" });
         }
 
-        // ── Error Logs ────────────────────────────────────────────────────────────
+        //  Error Logs ────────────────────────────────────────────────────────────
         [HttpGet, Route("logs")]
         public IHttpActionResult GetLogs()
             => Ok(new { logs = _db.GetErrors(_srv.ActiveUser, "bim360").Select(ErrToLog) });
@@ -245,7 +245,7 @@ namespace AutodeskAutomation.Controllers
             _db.DeleteError(id); return Ok(new { status = "deleted" });
         }
 
-        // ── Admin URL ─────────────────────────────────────────────────────────────
+        //  Admin URL ─────────────────────────────────────────────────────────────
         [HttpPost, Route("admin-url")]
         public IHttpActionResult SetAdminUrl([FromBody] AdminUrlRequest body)
         {
@@ -254,7 +254,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "ok" });
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
+        //  Helpers ───────────────────────────────────────────────────────────────
         private string GetSharedAuthPath()
         {
             var dir = System.IO.Path.Combine(

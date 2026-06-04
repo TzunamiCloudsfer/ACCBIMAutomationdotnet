@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -16,7 +16,7 @@ namespace AutodeskAutomation.Services
 
         private static readonly HttpClient _http = new HttpClient();
 
-        // V2 endpoints (APS — Autodesk Platform Services)
+        // V2 endpoints (APS -- Autodesk Platform Services)
         private const string AuthEndpoint  = "https://developer.api.autodesk.com/authentication/v2/authorize";
         private const string TokenEndpoint = "https://developer.api.autodesk.com/authentication/v2/token";
         private const string UserInfoUrl   = "https://api.userprofile.autodesk.com/userinfo";
@@ -27,7 +27,7 @@ namespace AutodeskAutomation.Services
 
         private OAuthService() { }
 
-        // ── Config helpers ────────────────────────────────────────────────────────
+        //  Config helpers ────────────────────────────────────────────────────────
         public static string ClientId
             => System.Configuration.ConfigurationManager.AppSettings["Autodesk.ClientId"] ?? "";
         public static string ClientSecret
@@ -36,7 +36,7 @@ namespace AutodeskAutomation.Services
             => System.Configuration.ConfigurationManager.AppSettings["Autodesk.RedirectUri"]
             ?? "http://localhost:54147/api/auth/autodesk/callback";
 
-        // ── Build the authorization URL ───────────────────────────────────────────
+        //  Build the authorization URL ───────────────────────────────────────────
         public string BuildAuthorizationUrl(string state)
         {
             return $"{AuthEndpoint}" +
@@ -47,7 +47,7 @@ namespace AutodeskAutomation.Services
                    $"&state={Uri.EscapeDataString(state)}";
         }
 
-        // ── Exchange authorization code for tokens ────────────────────────────────
+        //  Exchange authorization code for tokens ────────────────────────────────
         public async Task<AutodeskTokenDocument> ExchangeCodeAsync(string code)
         {
             // V1 token endpoint uses Basic auth for client credentials
@@ -73,7 +73,7 @@ namespace AutodeskAutomation.Services
             return ParseTokenResponse(body);
         }
 
-        // ── Refresh an expired access token ───────────────────────────────────────
+        //  Refresh an expired access token ───────────────────────────────────────
         public async Task<AutodeskTokenDocument> RefreshAsync(string refreshToken)
         {
             var credentials = Convert.ToBase64String(
@@ -97,7 +97,7 @@ namespace AutodeskAutomation.Services
             return ParseTokenResponse(body);
         }
 
-        // ── Get a valid token for a user (auto-refresh if expired) ────────────────
+        //  Get a valid token for a user (auto-refresh if expired) ────────────────
         public async Task<string> GetValidAccessTokenAsync(string? userEmail)
         {
             var doc = DatabaseService.Instance.GetAutodeskToken(userEmail);
@@ -114,7 +114,7 @@ namespace AutodeskAutomation.Services
             return doc.AccessToken;
         }
 
-        // ── Get user email from Autodesk userinfo endpoint ────────────────────────
+        //  Get user email from Autodesk userinfo endpoint ────────────────────────
         public async Task<string?> GetUserEmailAsync(string accessToken)
         {
             var req = new HttpRequestMessage(HttpMethod.Get, UserInfoUrl);
@@ -125,7 +125,7 @@ namespace AutodeskAutomation.Services
             return json["email"]?.ToString()?.ToLowerInvariant().Trim();
         }
 
-        // ── Get hubs using an access token ────────────────────────────────────────
+        //  Get hubs using an access token ────────────────────────────────────────
         public async Task<JArray> GetHubsAsync(string accessToken)
         {
             var req = new HttpRequestMessage(HttpMethod.Get, HubsUrl);
@@ -137,9 +137,9 @@ namespace AutodeskAutomation.Services
             return json["data"] as JArray ?? new JArray();
         }
 
-        // ── Check if a saved Playwright browser session (auth-state.json) exists ──
-        // Only returns true if the file exists AND is ≤ 30 days old.
-        // Does NOT try client credentials — this is purely a "was the user already
+        //  Check if a saved Playwright browser session (auth-state.json) exists 
+        // Only returns true if the file exists AND is  30 days old.
+        // Does NOT try client credentials -- this is purely a "was the user already
         // logged in via the browser?" check, so Chrome doesn't need to open again.
         public bool HasValidBrowserSession(string authStatePath)
         {
@@ -148,7 +148,7 @@ namespace AutodeskAutomation.Services
             return age.TotalDays <= 30;
         }
 
-        // ── Get valid OAuth token (for REST API calls, not browser automation) ───
+        //  Get valid OAuth token (for REST API calls, not browser automation) 
         public async Task<AutodeskTokenDocument?> GetExistingSessionAsync(string? userEmail, string authStatePath)
         {
             // 1. Check stored RavenDB OAuth token (3-legged, from a real user login)
@@ -170,10 +170,10 @@ namespace AutodeskAutomation.Services
                 }
             }
 
-            return null;  // no valid session — caller must open the browser
+            return null;  // no valid session -- caller must open the browser
         }
 
-        // ── 2-legged Client Credentials (no redirect URL needed) ─────────────────
+        //  2-legged Client Credentials (no redirect URL needed) ─────────────────
         // Use this when 3-legged OAuth callback URL is not yet registered.
         // Gives app-level access to project APIs without user login.
         public async Task<AutodeskTokenDocument> GetClientCredentialsTokenAsync()
@@ -199,7 +199,7 @@ namespace AutodeskAutomation.Services
             return ParseTokenResponse(body);
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
+        //  Helpers ───────────────────────────────────────────────────────────────
         private static AutodeskTokenDocument ParseTokenResponse(string json)
         {
             var obj = JObject.Parse(json);

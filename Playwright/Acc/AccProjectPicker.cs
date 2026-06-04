@@ -20,7 +20,7 @@ namespace AutodeskAutomation.Playwright.Acc
 
             var currentUrl = _page.Url;
             if (currentUrl.Contains("identity.autodesk") || currentUrl.Contains("accounts.autodesk"))
-                throw new Exception("Autodesk session expired â€” please re-authenticate.");
+                throw new Exception("Autodesk session expired --  please re-authenticate.");
 
             // If redirected away from the project page it's likely no_dm
             if (!currentUrl.Contains("acc.autodesk.com"))

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -114,7 +114,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "resumed" });
         }
 
-        // ── Login (OAuth) ─────────────────────────────────────────────────────────
+        //  Login (OAuth) ─────────────────────────────────────────────────────────
         // Returns the Autodesk OAuth authorization URL; frontend opens it in a popup.
         // Actual token exchange happens in OAuthController.Callback.
         [HttpPost, Route("~/api/login/start")]
@@ -126,13 +126,13 @@ namespace AutodeskAutomation.Controllers
 
             if (_srv.AccRunning || _srv.Bim360Running)
                 return Content(HttpStatusCode.Conflict,
-                    new { error = "An export is running — stop it before logging in." });
+                    new { error = "An export is running -- stop it before logging in." });
 
-            // ── Open a real browser window (Chrome) ──────────────────────────────
+            //  Open a real browser window (Chrome) ──────────────────────────────
             // Playwright opens Chrome at https://acc.autodesk.com.
-            // • If already logged in there  → cookies are grabbed automatically,
+            //  If already logged in there  -> cookies are grabbed automatically,
             //   the browser detects the dashboard and completes without user action.
-            // • If not logged in            → user completes Autodesk login/MFA,
+            //  If not logged in            -> user completes Autodesk login/MFA,
             //   then the browser detects the dashboard and saves the session.
             // Either way, the auth-state.json (cookies) is saved for future use.
             _srv.LoginPending   = true;
@@ -148,7 +148,7 @@ namespace AutodeskAutomation.Controllers
 
             return Ok(new { status = "started" });
 
-            // ── (dead code — kept for reference: 2-legged fallback) ──────────────
+            //  (dead code -- kept for reference: 2-legged fallback) ──────────────
             // The block below is no longer reached but shows how to use 2-legged
             // if the browser approach is unavailable (e.g. headless server).
             #pragma warning disable CS0162
@@ -196,7 +196,7 @@ namespace AutodeskAutomation.Controllers
             #pragma warning restore CS0162
         }
 
-        // ── Check if Autodesk session is still alive (called on page load) ──────
+        //  Check if Autodesk session is still alive (called on page load) ──────
         [HttpGet, Route("~/api/auth/session/check")]
         public IHttpActionResult CheckSession()
         {

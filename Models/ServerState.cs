@@ -1,6 +1,6 @@
-namespace AutodeskAutomation.Models
+﻿namespace AutodeskAutomation.Models
 {
-    // Singleton — mirrors Node's `srv` object in server-unified.js
+    // Singleton -- mirrors Node's `srv` object in server-unified.js
     public class ServerState
     {
         private static readonly ServerState _instance = new ServerState();

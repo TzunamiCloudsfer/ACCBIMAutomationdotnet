@@ -38,7 +38,7 @@ namespace AutodeskAutomation.Playwright.Acc
                     { State = WaitForSelectorState.Visible, Timeout = 5_000 });
                 await confirmBtn.ClickAsync();
             }
-            catch { /* no confirmation dialog â€” export was triggered directly */ }
+            catch { /* no confirmation dialog --  export was triggered directly */ }
 
             await Task.Delay(1000);
         }

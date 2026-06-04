@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -19,7 +19,7 @@ namespace AutodeskAutomation.Services
     {
         private static readonly HttpClient _http = new HttpClient();
 
-        // ── Public entry point ────────────────────────────────────────────────────
+        //  Public entry point ────────────────────────────────────────────────────
         public async Task<ApiExportResult> ExportDocumentLogAsync(
             string accountId, string projectId, string? userEmail)
         {
@@ -69,7 +69,7 @@ namespace AutodeskAutomation.Services
 
             var bearer = token.AccessToken;
 
-            // ── Step 1: Verify project exists via Data Management API ─────────────
+            //  Step 1: Verify project exists via Data Management API ─────────────
             var prefixedProjectId = projectId.StartsWith("b.") ? projectId : $"b.{projectId}";
             var foldersUrl = $"https://developer.api.autodesk.com/data/v1/projects/{prefixedProjectId}/folders/root/contents";
 
@@ -103,7 +103,7 @@ namespace AutodeskAutomation.Services
                 return ApiExportResult.NotAvailable($"Folder API error: {ex.Message}");
             }
 
-            // ── Step 2: Find Plans and Project Files folder IDs ───────────────────
+            //  Step 2: Find Plans and Project Files folder IDs ───────────────────
             var folders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var data = rootContents?["data"] as JArray ?? new JArray();
             foreach (var item in data)
@@ -123,7 +123,7 @@ namespace AutodeskAutomation.Services
                 platform = "bim360"
             });
 
-            // ── Step 3: Trigger document log export for each root ─────────────────
+            //  Step 3: Trigger document log export for each root ─────────────────
             int queued = 0;
             foreach (var kvp in folders)
             {
@@ -142,7 +142,7 @@ namespace AutodeskAutomation.Services
                     if (exported)
                     {
                         queued++;
-                        Console.WriteLine($"[api-export] ✓ Queued export for '{folderName}'");
+                        Console.WriteLine($"[api-export]  Queued export for '{folderName}'");
                         SseService.Instance.Broadcast("log", new
                         {
                             level = "INFO",
@@ -159,7 +159,7 @@ namespace AutodeskAutomation.Services
 
             if (queued == 0 && folders.Count > 0)
                 return ApiExportResult.NotAvailable(
-                    "No export API available — will use browser automation");
+                    "No export API available -- will use browser automation");
 
             return new ApiExportResult
             {
@@ -169,7 +169,7 @@ namespace AutodeskAutomation.Services
             };
         }
 
-        // ── Try various known export endpoints ────────────────────────────────────
+        //  Try various known export endpoints ────────────────────────────────────
         private async Task<bool> TriggerFolderExportAsync(
             string bearer, string projectId, string accountId, string folderId, string folderName)
         {
@@ -202,7 +202,7 @@ namespace AutodeskAutomation.Services
 
                     var resp = await _http.SendAsync(req);
                     var respBody = await resp.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[api-export] {url} → {resp.StatusCode}: {respBody.Substring(0, Math.Min(200, respBody.Length))}");
+                    Console.WriteLine($"[api-export] {url} -> {resp.StatusCode}: {respBody.Substring(0, Math.Min(200, respBody.Length))}");
 
                     if (resp.IsSuccessStatusCode ||
                         (int)resp.StatusCode == 202 ||  // 202 Accepted = queued
