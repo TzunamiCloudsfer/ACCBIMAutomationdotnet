@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 
@@ -518,10 +518,10 @@
         </div>
       </div>
 
-      <!-- Admin URL setup — shown when accountAdminUrl is not configured -->
-      <div id="admin-url-setup-card" class="card hidden" style="margin-bottom:16px">
+      <!-- Admin URL setup — always visible so users can enter or update their account URL -->
+      <div id="admin-url-setup-card" class="card" style="margin-bottom:16px">
         <div class="card-body">
-          <p style="font-weight:600;margin-bottom:4px">Account Admin URL not configured</p>
+          <p id="admin-url-card-title" style="font-weight:600;margin-bottom:4px">Account Admin URL not configured</p>
           <p style="font-size:13px;color:var(--txt-3);margin-bottom:12px">
             Enter your Autodesk account admin URL to enable project discovery.
             <br>ACC format: <code style="font-size:11px">https://acc.autodesk.com/account-admin/projects/accounts/&lt;uuid&gt;/active</code>
@@ -859,6 +859,6 @@
   </div>
 </div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

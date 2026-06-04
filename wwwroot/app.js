@@ -1771,7 +1771,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auth page buttons
   $('btn-login')        .addEventListener('click', startLogin);
-  $('btn-relogin')      .addEventListener('click', () => showAuthState('idle'));
+  $('btn-relogin')      .addEventListener('click', startLogin);
   $('btn-to-platforms') .addEventListener('click', () => navigate('platforms'));
   $('btn-cancel-login') && $('btn-cancel-login').addEventListener('click', () => {
     // User cancels — just go back to idle
