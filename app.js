@@ -1821,17 +1821,17 @@ document.addEventListener('DOMContentLoaded', () => {
     n.addEventListener('click', () => { navigate(n.dataset.page); closeSidebar(); });
   });
 
-  // Auth page buttons
-  $('btn-login')        .addEventListener('click', startLogin);
-  $('btn-relogin')      .addEventListener('click', () => showAuthState('idle'));
-  $('btn-to-platforms') .addEventListener('click', () => navigate('platforms'));
-  $('btn-cancel-login') && $('btn-cancel-login').addEventListener('click', () => {
-    // User cancels — just go back to idle
-    if (A.loginTimer) clearInterval(A.loginTimer);
-    A.loginPending = false; A.loginStart = null;
-    showAuthState('idle');
-    showToast('Login cancelled.', 'warning');
-  });
+    // Auth page buttons
+    $('btn-login').addEventListener('click', startLogin);
+    $('btn-relogin').addEventListener('click', startLogin);
+    $('btn-to-platforms').addEventListener('click', () => navigate('platforms'));
+    $('btn-cancel-login') && $('btn-cancel-login').addEventListener('click', () => {
+        // User cancels — just go back to idle
+        if (A.loginTimer) clearInterval(A.loginTimer);
+        A.loginPending = false; A.loginStart = null;
+        showAuthState('idle');
+        showToast('Login cancelled.', 'warning');
+    });
 
   // Projects page — header checkbox & bulk actions
   $('check-all').addEventListener('change', e => {

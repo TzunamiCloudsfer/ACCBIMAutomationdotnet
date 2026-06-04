@@ -128,23 +128,7 @@ namespace AutodeskAutomation.Controllers
                 return Content(HttpStatusCode.Conflict,
                     new { error = "An export is running — stop it before logging in." });
 
-            // ── Step 1: Check for saved browser session (skip Chrome if recent) ────
-            // Only skip opening Chrome if auth-state.json is ≤ 30 days old —
-            // meaning the user already completed a real browser login recently.
-            var authStatePath = GetSharedAuthPath();
-            if (OAuthService.Instance.HasValidBrowserSession(authStatePath))
-            {
-                _srv.LoginDetected = true;
-                var user = _srv.ActiveUser ?? "saved session";
-                _sse.Broadcast("login-status", new
-                {
-                    status = "completed", elapsed = 0, user, source = "cookie"
-                });
-                _sse.Broadcast("user-changed", new { user });
-                return Ok(new { status = "completed", source = "cookie", user });
-            }
-
-            // ── Step 2: Open a real browser window (Chrome) ───────────────────────
+            // ── Open a real browser window (Chrome) ──────────────────────────────
             // Playwright opens Chrome at https://acc.autodesk.com.
             // • If already logged in there  → cookies are grabbed automatically,
             //   the browser detects the dashboard and completes without user action.
