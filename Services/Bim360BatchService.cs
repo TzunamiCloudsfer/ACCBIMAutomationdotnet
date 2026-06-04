@@ -326,7 +326,7 @@ namespace AutodeskAutomation.Services
             IPage page, ProjectDocument project, string reportsUrl, string? userEmail,
             DateTime exportTriggeredAt = default)
         {
-            if (exportTriggeredAt == default) exportTriggeredAt = DateTime.UtcNow.AddMinutes(-5);
+            if (exportTriggeredAt == default) exportTriggeredAt = DateTime.Now.AddMinutes(-5);
             var sse = SseService.Instance;
             var downloadsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "storage", "downloads");
             Directory.CreateDirectory(downloadsDir);
@@ -373,7 +373,7 @@ namespace AutodeskAutomation.Services
                 // The Reports table shows "Run at" in column 3 (index 2), newest first.
                 // Autodesk generates reports asynchronously -- can take up to 3 minutes.
                 sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                    message = $"[{project.Name}] Waiting for report created after {exportTriggeredAt:HH:mm:ss} UTC...",
+                    message = $"[{project.Name}] Waiting for report created after {exportTriggeredAt:HH:mm:ss} (local time)...",
                     platform = "bim360" });
 
                 int targetRowIndex = -1;
@@ -398,8 +398,8 @@ namespace AutodeskAutomation.Services
                             var dtStr = rowDatetimes[ri].Trim();
                             if (DateTime.TryParse(dtStr, out DateTime rowDt))
                             {
-                                // Convert to UTC for comparison (assume server is in local time)
-                                if (rowDt.ToUniversalTime() >= exportTriggeredAt.AddSeconds(-30))
+                                // Compare using local machine time (Reports page shows local time)
+                                if (rowDt >= exportTriggeredAt.AddSeconds(-30))
                                 {
                                     targetRowIndex = ri;
                                     sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
@@ -443,50 +443,45 @@ namespace AutodeskAutomation.Services
                     message = $"[{project.Name}] Opening report menu to download Excel...",
                     platform = "bim360" });
 
-                // Click the three-dot menu on the first row
-                // data-testid="table-row-menu" (aria-label="toggle menu")
-                var menuBtn = page.Locator("[data-testid=\"table-row-menu\"]").First;
-                if (await menuBtn.CountAsync() == 0)
-                {
-                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
-                        message = $"[{project.Name}] No menu button on report row",
-                        platform = "bim360" });
-                    return;
-                }
-
-                await menuBtn.ClickAsync(new LocatorClickOptions { Force = true });
-                await Task.Delay(1000);
-
-                // Screenshot the open menu so we can see what options are available
-                var shotDir3 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "storage", "screenshots");
-                Directory.CreateDirectory(shotDir3);
-                var slug3 = System.Text.RegularExpressions.Regex.Replace(project.Name, @"[^\w]", "_");
-                var menuShot = Path.Combine(shotDir3, $"{slug3}-report-menu.png");
-                await page.ScreenshotAsync(new PageScreenshotOptions { Path = menuShot, FullPage = false });
-
-                // Log ALL visible menu items so we know what text to click
-                var menuItemTexts = await page.EvaluateAsync<string[]>(@"
-                    () => [...document.querySelectorAll('[role=""menuitem""], [role=""option""], [data-testid*=""menu""] button')]
-                        .filter(el => el.offsetWidth > 0 && el.innerText.trim())
-                        .map(el => el.innerText.trim())");
-
-                var menuText = menuItemTexts?.Length > 0
-                    ? string.Join(", ", menuItemTexts)
-                    : "(no menu items found)";
-                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                    message = $"[{project.Name}] Menu items: {menuText}",
-                    platform = "bim360" });
-                Console.WriteLine($"[reports] Menu items: {menuText}");
-                Console.WriteLine($"[reports] Menu screenshot: {menuShot}");
-
-                // Try each possible menu item text for download
+                // Exponential retry for the download (5 attempts, delays: 0 2 4 8 16 seconds)
                 IDownload? download = null;
-                var downloadTexts = new[] { "Download", "Export", "Export to Excel", "Export report" };
-                foreach (var text in downloadTexts)
+                const int MaxDownloadAttempts = 5;
+                int delayMs = 0;
+
+                for (int attempt = 1; attempt <= MaxDownloadAttempts && download == null; attempt++)
                 {
-                    var candidate = page.GetByRole(AriaRole.Menuitem, new() { Name = text })
+                    if (delayMs > 0)
+                    {
+                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                            message = $"[{project.Name}] Download retry {attempt}/{MaxDownloadAttempts} -- waiting {delayMs / 1000}s (exponential backoff)...",
+                            platform = "bim360" });
+                        await Task.Delay(delayMs);
+                    }
+
+                    // Reload the page on retries to ensure fresh menu state
+                    if (attempt > 1)
+                    {
+                        await page.ReloadAsync(new PageReloadOptions
+                            { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 15_000 });
+                        await Task.Delay(3000);
+                    }
+
+                    // Click the three-dot menu on the target row
+                    var menuBtn = page.Locator("[data-testid=\"table-row-menu\"]").First;
+                    if (await menuBtn.CountAsync() == 0)
+                    {
+                        delayMs = delayMs == 0 ? 2000 : delayMs * 2;
+                        continue;
+                    }
+
+                    await menuBtn.ClickAsync(new LocatorClickOptions { Force = true });
+                    await Task.Delay(800);
+
+                    // Try "Download" menu item
+                    var candidate = page.GetByRole(AriaRole.Menuitem, new() { Name = "Download" })
                         .Or(page.Locator("[role=\"menuitem\"]")
-                            .Filter(new LocatorFilterOptions { HasText = text }));
+                            .Filter(new LocatorFilterOptions { HasText = "Download" }));
+
                     if (await candidate.CountAsync() > 0)
                     {
                         try
@@ -495,16 +490,27 @@ namespace AutodeskAutomation.Services
                                 new PageWaitForDownloadOptions { Timeout = 20_000 });
                             await candidate.First.ClickAsync(new LocatorClickOptions { Force = true });
                             download = await dlTask;
-                            break;
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[reports] Download attempt {attempt} failed: {ex.Message}");
+                            // Close menu if still open
+                            await page.Keyboard.PressAsync("Escape").ConfigureAwait(false);
+                        }
                     }
+                    else
+                    {
+                        await page.Keyboard.PressAsync("Escape").ConfigureAwait(false);
+                    }
+
+                    // Exponential backoff starting at 10s: 10s, 20s, 40s, 80s
+                    delayMs = delayMs == 0 ? 10_000 : delayMs * 2;
                 }
 
                 if (download == null)
                 {
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
-                        message = $"[{project.Name}] Download did not start",
+                        message = $"[{project.Name}] Download failed after {MaxDownloadAttempts} attempts",
                         platform = "bim360" });
                     return;
                 }

@@ -14,7 +14,7 @@ namespace AutodeskAutomation.Playwright.Bim360
         // The caller uses this to identify the newly created report row in the Reports table.
         public async Task<DateTime> OpenAndExport()
         {
-            var exportTriggeredAt = DateTime.UtcNow;
+            var exportTriggeredAt = DateTime.Now.AddMinutes(-1);
             await DismissPendoOverlay();
 
             // Detect which page we're on by waiting for the ACC or BIM360 toolbar
@@ -44,7 +44,7 @@ namespace AutodeskAutomation.Playwright.Bim360
 
             if (isAccPage)
             {
-                exportTriggeredAt = DateTime.UtcNow;  // record just before clicking
+                exportTriggeredAt = DateTime.Now.AddMinutes(-1);  // 1 min buffer so Reports table match is reliable
                 await OpenAccExportDropdown(accExportBtn);
                 return exportTriggeredAt;
             }
