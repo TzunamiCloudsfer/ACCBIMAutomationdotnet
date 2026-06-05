@@ -25,12 +25,17 @@ namespace AutodeskAutomation.Playwright.Bim360
 
             // Wait up to 15s for whichever toolbar appears first
             bool isAccPage = false;
+            bool toolbarFound = false;
             for (int w = 0; w < 15; w++)
             {
-                if (await accExportBtn.CountAsync() > 0) { isAccPage = true;  break; }
-                if (await bim360Btn.CountAsync()    > 0) { isAccPage = false; break; }
+                if (await accExportBtn.CountAsync() > 0) { isAccPage = true;  toolbarFound = true; break; }
+                if (await bim360Btn.CountAsync()    > 0) { isAccPage = false; toolbarFound = true; break; }
                 await Task.Delay(1000);
             }
+
+            // No toolbar at all = page has no Data Management (mark as no_dm not failed)
+            if (!toolbarFound)
+                throw new InvalidOperationException("no_dm: No export toolbar found on page");
 
             Console.WriteLine($"[dialog] isAccPage={isAccPage}, url={_page.Url}");
             AutodeskAutomation.Services.SseService.Instance.Broadcast("log", new
@@ -52,7 +57,10 @@ namespace AutodeskAutomation.Playwright.Bim360
             //  Fallback: BIM360 ActionBarButton hover scan ─────────────────────
 
             // 1 --  find and click the Document Log toolbar button
-            await ClickDocumentLogButton();
+            // Returns false if no "Document log" button found = project has no Data Management
+            var foundDocLog = await ClickDocumentLogButton();
+            if (!foundDocLog)
+                throw new InvalidOperationException("no_dm: Document log button not found -- project has no Data Management");
 
             await DismissPendoOverlay();
 
@@ -152,18 +160,21 @@ namespace AutodeskAutomation.Playwright.Bim360
             });
             Console.WriteLine("[bim360] ACC export complete.");
         }
-        // Hover over each .ActionBarButton to find the one with "Document log" tooltip
-        private async Task ClickDocumentLogButton()
+        // Hover over each .ActionBarButton to find the one with "Document log" tooltip.
+        // Returns true if found and clicked, false if not found (= no Data Management).
+        private async Task<bool> ClickDocumentLogButton()
         {
             var btns  = _page.Locator(".ActionBarButton");
             var count = await btns.CountAsync();
-            Console.WriteLine($"[bim360] Scanning {count} ActionBarButton(s) for Document log tooltip--");
+            Console.WriteLine($"[bim360] Scanning {count} ActionBarButton(s) for Document log tooltip");
+
+            if (count == 0) return false;  // no toolbar at all = no DM
 
             for (int i = 0; i < count; i++)
             {
                 try
                 {
-                    await btns.Nth(i).HoverAsync();
+                    await btns.Nth(i).HoverAsync(new LocatorHoverOptions { Timeout = 3_000 });
                     await Task.Delay(500);
 
                     bool hit = await _page.EvaluateAsync<bool>(@"() => {
@@ -178,20 +189,18 @@ namespace AutodeskAutomation.Playwright.Bim360
 
                     if (hit)
                     {
-                        Console.WriteLine($"[bim360] Document log tooltip on ActionBarButton[{i}] --  clicking.");
+                        Console.WriteLine($"[bim360] Document log tooltip on ActionBarButton[{i}] -- clicking.");
                         await btns.Nth(i).ClickAsync(new LocatorClickOptions { Force = true });
                         await Task.Delay(600);
-                        return;
+                        return true;
                     }
                 }
                 catch { /* hover failed, try next */ }
             }
 
-            // Fallback: second-to-last ActionBarButton
-            var fb = Math.Max(0, count - 2);
-            Console.WriteLine($"[bim360] Tooltip not found --  falling back to ActionBarButton[{fb}].");
-            await btns.Nth(fb).ClickAsync(new LocatorClickOptions { Force = true });
-            await Task.Delay(600);
+            // "Document log" tooltip not found on any button = no Data Management
+            Console.WriteLine("[bim360] Document log not found in toolbar -- no_dm");
+            return false;
         }
 
         private async Task DismissPendoOverlay()

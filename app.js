@@ -1195,7 +1195,7 @@ function syncChips() {
   const r = A.results;
   setText('chip-success', r.success || 0);
   setText('chip-failed',  r.failed  || 0);
-  setText('chip-nodm',    r.no_dm   || 0);
+  setText('chip-nodm',    r.no_dm || r.noDm || 0);
   setText('chip-skipped', r.skipped || 0);
 }
 

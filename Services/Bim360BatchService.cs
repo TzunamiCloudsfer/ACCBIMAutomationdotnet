@@ -271,14 +271,50 @@ namespace AutodeskAutomation.Services
                 }
                 } // end if (needsBrowser)
 
-                // Update checkpoint and results
+                // Always log the result status so it's visible in the export log panel
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Export result: {result.Status}" +
+                              (result.Error != null ? $" -- {result.Error}" : ""),
+                    platform = "bim360" });
+
+                // ── ACC: read the report BEFORE marking Done ──────────────────────
+                // The "Done" chip only updates AFTER the report is successfully read.
+                // Open a fresh browser (export browser already closed).
+                if (result.Status == "success" && !string.IsNullOrEmpty(result.ReportsUrl))
+                {
+                    try
+                    {
+                        using var rptPlaywright = await Microsoft.Playwright.Playwright.CreateAsync();
+                        var rptBrowser = await rptPlaywright.Chromium.LaunchAsync(
+                            AutodeskAutomation.Helpers.BrowserHelper.HeadlessOptions());
+                        try
+                        {
+                            var rptCtx = File.Exists(opts.AuthStatePath)
+                                ? await rptBrowser.NewContextAsync(new BrowserNewContextOptions
+                                    { StorageStatePath = opts.AuthStatePath })
+                                : await rptBrowser.NewContextAsync();
+                            var rptPage = await rptCtx.NewPageAsync();
+
+                            await NavigateToReportsAndCapture(
+                                rptPage, project, result.ReportsUrl,
+                                opts.UserEmail, result.ExportTriggeredAt);
+                        }
+                        finally { await rptBrowser.CloseAsync(); }
+                    }
+                    catch (Exception rptEx)
+                    {
+                        Console.WriteLine($"[reports] Browser error: {rptEx.Message}");
+                    }
+                }
+
+                // ── Update checkpoint and chips AFTER report is read ──────────────
                 if (result.Status == "success")
                 {
                     db.MarkCompleted(opts.UserEmail, "bim360", project);
                     results.Success++;
                     results.EmailsQueued += result.EmailsQueued;
                     sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                        message = $"[{project.Name}] DONE -- marked as Completed (success={results.Success}, emails={results.EmailsQueued})",
+                        message = $"[{project.Name}] DONE -- Completed saved for user={opts.UserEmail ?? "null"}, Done={results.Success}",
                         platform = "bim360" });
                 }
                 else if (result.Status == "no_dm")
@@ -709,6 +745,9 @@ namespace AutodeskAutomation.Services
         {
             var start = DateTime.UtcNow;
             int emailsQueued = 0;
+            // Set if ACC export -- allows report capture AFTER chips update
+            string? reportsUrlForCapture = null;
+            DateTime exportTimeForCapture = default;
 
             try
             {
@@ -742,14 +781,14 @@ namespace AutodeskAutomation.Services
 
                 if (currentUrl.Contains("/docs/files/") || currentUrl.Contains("acc.autodesk.com"))
                 {
-                    //  ACC docs/files page: Export  -> Files Log ────────────────
-                    Console.WriteLine($"[bim360] ACC docs/files page -- clicking Export  -> Files Log");
+                    //  ACC docs/files page: Export -> Files Log
+                    Console.WriteLine($"[bim360] ACC docs/files page -- clicking Export -> Files Log");
                     var exportTriggeredAt = await dialog.OpenAndExport();
                     emailsQueued++;
 
-                    //  Navigate to Reports page -- find the row created AFTER exportTriggeredAt
-                    var reportsUrl = $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}";
-                    await NavigateToReportsAndCapture(picker.Page, project, reportsUrl, userEmail, exportTriggeredAt);
+                    //  Will be set on the return value for deferred capture after chips update
+                    reportsUrlForCapture  = $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}";
+                    exportTimeForCapture  = exportTriggeredAt;
                 }
                 else
                 {
@@ -782,8 +821,32 @@ namespace AutodeskAutomation.Services
                     }
                 }
 
-                return new ExportResult { Status = "success",
-                    Duration = (DateTime.UtcNow - start).TotalMilliseconds, EmailsQueued = emailsQueued };
+                return new ExportResult
+                {
+                    Status = "success",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds,
+                    EmailsQueued = emailsQueued,
+                    // ACC deferred report capture fields
+                    ReportsUrl = reportsUrlForCapture,
+                    ExportTriggeredAt = exportTimeForCapture
+                };
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("no_dm"))
+            {
+                // Explicit no_dm thrown when toolbar/Document log not found
+                return new ExportResult { Status = "no_dm",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds };
+            }
+            catch (Exception ex) when (
+                ex.Message.Contains("Execution context was destroyed") ||
+                ex.Message.Contains("context was destroyed") ||
+                ex.Message.Contains("most likely because of a navigation") ||
+                ex.Message.Contains("Target page, context or browser has been closed"))
+            {
+                // Page navigated away during operation = no stable Data Management context
+                Console.WriteLine($"[bim360] Navigation destroyed context -- treating as no_dm: {ex.Message}");
+                return new ExportResult { Status = "no_dm",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds };
             }
             catch (Exception ex)
             {
@@ -799,6 +862,11 @@ namespace AutodeskAutomation.Services
         public string? Error { get; set; }
         public double Duration { get; set; }
         public int EmailsQueued { get; set; }
+
+        // ACC deferred report capture -- set by ExportDocumentLog so batch loop
+        // can update chips immediately, then open a NEW browser for the report
+        public string? ReportsUrl { get; set; }
+        public DateTime ExportTriggeredAt { get; set; }
     }
 }
 
