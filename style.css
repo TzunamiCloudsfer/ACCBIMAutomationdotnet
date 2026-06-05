@@ -7586,9 +7586,10 @@ body[data-platform="bim360"] .nav-item.active {
     align-items: center;
     gap: 8px;
     background: #fff;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 7px 12px;
+    border: 1.5px solid #c8d8e8;
+    border-radius: 24px;
+    padding: 9px 16px;
+    min-width: 240px;
 }
 
     .np-search input {
@@ -7597,14 +7598,43 @@ body[data-platform="bim360"] .nav-item.active {
         font: 14px 'Inter',sans-serif;
         color: #1e293b;
         background: none;
-        min-width: 160px;
+        min-width: 180px;
     }
+
+.np-res-filter-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.np-res-filter-wrap label {
+    font: 500 13px 'Inter',sans-serif;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.np-res-filter {
+    padding: 8px 32px 8px 12px;
+    border: 1.5px solid #c8d8e8;
+    border-radius: 8px;
+    font: 14px 'Inter',sans-serif;
+    background: #fff;
+    color: #1e293b;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 20 20' fill='%2364748b' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+    cursor: pointer;
+}
 
 .np-table-wrap {
     width: 100%;
     background: #fff;
+    border: 1.5px solid #c8d8e8;
     border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 18px rgba(0,56,150,.10);
     overflow: hidden;
     margin-bottom: 20px;
 }
@@ -7615,21 +7645,21 @@ body[data-platform="bim360"] .nav-item.active {
 }
 
     .np-table th {
-        padding: 11px 16px;
+        padding: 12px 18px;
         font: 600 11px 'Inter',sans-serif;
         color: #64748b;
         text-align: left;
         text-transform: uppercase;
-        letter-spacing: .05em;
-        border-bottom: 1.5px solid #e2e8f0;
-        background: #f8fafc;
+        letter-spacing: .06em;
+        border-bottom: 1.5px solid #dde8f4;
+        background: #f4f8fc;
     }
 
     .np-table td {
-        padding: 12px 16px;
+        padding: 14px 18px;
         font-size: 14px;
         color: #1e293b;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e8eef6;
     }
 
     .np-table tr:last-child td {
@@ -7637,12 +7667,14 @@ body[data-platform="bim360"] .nav-item.active {
     }
 
     .np-table tr:hover td {
-        background: #f8fafc;
+        background: #f0f5ff;
     }
 
 .np-badge-acc {
-    display: inline-block;
-    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
     border-radius: 20px;
     font: 700 11px 'Inter',sans-serif;
     background: #dbeafe;
@@ -7650,12 +7682,25 @@ body[data-platform="bim360"] .nav-item.active {
 }
 
 .np-badge-bim360 {
-    display: inline-block;
-    padding: 3px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
     border-radius: 20px;
     font: 700 11px 'Inter',sans-serif;
-    background: #d1fae5;
-    color: #065f46;
+    background: #1e40af;
+    color: #fff;
+}
+
+.np-badge-forma {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font: 700 11px 'Inter',sans-serif;
+    background: #ede9fe;
+    color: #5b21b6;
 }
 
 .np-empty {
@@ -7779,7 +7824,7 @@ body[data-platform="bim360"] .nav-item.active {
 
 .np-res-summary {
     background: #fff;
-    border: 1.5px solid #e2e8f0;
+    border: 1.5px solid #c8d8e8;
     border-radius: 12px;
     padding: 20px 24px;
     width: 100%;
@@ -7787,7 +7832,7 @@ body[data-platform="bim360"] .nav-item.active {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 18px rgba(0,56,150,.10);
 }
 
 .np-res-toolbar {
