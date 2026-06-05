@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -18,7 +18,7 @@ namespace AutodeskAutomation.Controllers
         private readonly ServerState _srv = ServerState.Instance;
         private readonly SseService _sse = SseService.Instance;
 
-        // ── Step 1: Build authorization URL and return it to the SPA ─────────────
+        //  Step 1: Build authorization URL and return it to the SPA ─────────────
         // The frontend opens this URL in a popup or redirects to it.
         [HttpGet, Route("start")]
         public IHttpActionResult Start()
@@ -43,7 +43,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { authUrl = url, state });
         }
 
-        // ── Step 2: Autodesk redirects here after user authorizes ─────────────────
+        //  Step 2: Autodesk redirects here after user authorizes ─────────────────
         [HttpGet, Route("callback")]
         public async Task<HttpResponseMessage> Callback(string? code = null, string? state = null, string? error = null)
         {
@@ -104,7 +104,7 @@ namespace AutodeskAutomation.Controllers
 
                 return HtmlResponse("Authentication successful",
                     $"<p>Signed in as <strong>{email}</strong>.</p>" +
-                    "<p>You can close this window — the dashboard has been updated.</p>", true);
+                    "<p>You can close this window -- the dashboard has been updated.</p>", true);
             }
             catch (Exception ex)
             {
@@ -115,7 +115,7 @@ namespace AutodeskAutomation.Controllers
             }
         }
 
-        // ── Auto-detect Autodesk account admin URLs ───────────────────────────────
+        //  Auto-detect Autodesk account admin URLs ───────────────────────────────
         private async Task AutodetectAccountsAsync(string accessToken, string userEmail)
         {
             try
@@ -160,7 +160,7 @@ namespace AutodeskAutomation.Controllers
             }
         }
 
-        // ── Helper: return a styled HTML page for the callback tab ────────────────
+        //  Helper: return a styled HTML page for the callback tab ────────────────
         private HttpResponseMessage HtmlResponse(string title, string body, bool success)
         {
             var color = success ? "#22c55e" : "#ef4444";

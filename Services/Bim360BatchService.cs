@@ -96,7 +96,7 @@ namespace AutodeskAutomation.Services
             if (string.IsNullOrEmpty(opts.AccountId))
             {
                 sse.Broadcast("export-error", new { error =
-                    "AccountId is not set â€” please click Discover Projects first to populate the account ID.",
+                    "AccountId is not set --  please click Discover Projects first to populate the account ID.",
                     platform = "bim360" });
                 db.CompleteRun(db.CreateRun(opts.UserEmail, "bim360"), 0, 0, 0, 0, 0, 0,
                     "Stopped: AccountId missing");
@@ -106,7 +106,7 @@ namespace AutodeskAutomation.Services
             if (!authExists)
             {
                 sse.Broadcast("export-error", new { error =
-                    "auth-state.json not found â€” please click Login to authenticate with Autodesk first.",
+                    "auth-state.json not found --  please click Login to authenticate with Autodesk first.",
                     platform = "bim360" });
                 db.CompleteRun(db.CreateRun(opts.UserEmail, "bim360"), 0, 0, 0, 0, 0, 0,
                     "Stopped: auth-state.json missing");
@@ -115,13 +115,13 @@ namespace AutodeskAutomation.Services
 
             Directory.CreateDirectory(opts.ScreenshotsDir ?? ".");
 
-            // â”€â”€ Session warm-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // "" Session warm-up """""""""""""""""""""""""""""""""""""""""""""""""""
             // Navigate to the BIM360 account admin root before hitting individual
             // projects. This refreshes the BIM360 session and writes the
-            // account-specific cookies into the context â€” preventing "session expired"
+            // account-specific cookies into the context --  preventing "session expired"
             // on the first project.
             sse.Broadcast("log", new { level = "INFO",
-                message = "Warming up BIM360 admin sessionâ€¦", platform = "bim360" });
+                message = "Warming up BIM360 admin session--", platform = "bim360" });
             try
             {
                 using var warmupPlaywright = await Microsoft.Playwright.Playwright.CreateAsync();
@@ -152,7 +152,7 @@ namespace AutodeskAutomation.Services
                     if (wpage.Url.Contains("signin.autodesk") || wpage.Url.Contains("identity.autodesk"))
                     {
                         await warmupBrowser.CloseAsync();
-                        throw new Exception("Autodesk session expired â€” please click Login to re-authenticate.");
+                        throw new Exception("Autodesk session expired --  please click Login to re-authenticate.");
                     }
 
                     // Save the refreshed auth state with the new BIM360 cookies
@@ -166,11 +166,19 @@ namespace AutodeskAutomation.Services
             {
                 if (warmupEx.Message.Contains("session expired"))
                 {
-                    sse.Broadcast("export-error", new { error = warmupEx.Message, platform = "bim360" });
+                    var errMsg = "BIM360 session expired -- your Autodesk login does not include BIM360 admin access. " +
+                                 "Please click Login, sign into acc.autodesk.com, " +
+                                 "then also sign into admin.b360.autodesk.com when the browser navigates there.";
+                    sse.Broadcast("export-error", new { error = errMsg, platform = "bim360" });
+                    sse.Broadcast("log", new { level = "ERROR", timestamp = Now(),
+                        message = errMsg, platform = "bim360" });
                     srv.Bim360Running = false;
                     db.CompleteRun(db.CreateRun(opts.UserEmail, "bim360"), 0, 0, 0, 0, 0, 0, warmupEx.Message);
                     return new BatchResult();
                 }
+                // Non-fatal warmup error -- proceed anyway (individual projects handle their own auth)
+                sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                    message = $"[Warmup] {warmupEx.Message} -- proceeding with export", platform = "bim360" });
                 Console.WriteLine($"[bim360-warmup] Non-fatal: {warmupEx.Message}");
             }
 
@@ -182,13 +190,13 @@ namespace AutodeskAutomation.Services
 
             var results = new BatchResult { Skipped = projects.Count - pending.Count };
 
-            // â”€â”€ Broadcast export-start FIRST so A.runningPlatform is set on the client â”€â”€
+            // "" Broadcast export-start FIRST so A.runningPlatform is set on the client ""
             // All subsequent log events will then pass the isCurrentPlatform check.
             sse.Broadcast("export-start", new { total = pending.Count, skipped = results.Skipped, platform = "bim360" });
 
             // Diagnostic logs (now visible because export-start already fired)
             sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                message = $"BIM360 batch starting â€” accountId={opts.AccountId ?? "NULL"}, auth={authExists}, projects={projects.Count}, pending={pending.Count}",
+                message = $"BIM360 batch starting --  accountId={opts.AccountId ?? "NULL"}, auth={authExists}, projects={projects.Count}, pending={pending.Count}",
                 platform = "bim360" });
 
             srv.Bim360.Progress.Total = pending.Count;
@@ -215,7 +223,7 @@ namespace AutodeskAutomation.Services
                 string? screenshotPath = null;
                 ExportResult result;
 
-                // â”€â”€ Try API export first (faster, no browser needed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                // "" Try API export first (faster, no browser needed) """"""""""""""
                 result = await TryApiExport(project, opts, sse);
                 bool needsBrowser = result == null;
 
@@ -241,7 +249,7 @@ namespace AutodeskAutomation.Services
                     result = await ExportDocumentLog(picker, rootSel, dialog, project,
                         runId, opts.UserEmail, opts.AccountId);
 
-                    // Capture screenshot for both failed AND no_dm â€” shows where browser ended up
+                    // Capture screenshot for both failed AND no_dm --  shows where browser ended up
                     if ((result.Status == "failed" || result.Status == "no_dm") && opts.ScreenshotsDir != null)
                     {
                         try
@@ -263,23 +271,66 @@ namespace AutodeskAutomation.Services
                 }
                 } // end if (needsBrowser)
 
-                // Update checkpoint and results
+                // Always log the result status so it's visible in the export log panel
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Export result: {result.Status}" +
+                              (result.Error != null ? $" -- {result.Error}" : ""),
+                    platform = "bim360" });
+
+                // ── ACC: read the report BEFORE marking Done ──────────────────────
+                // The "Done" chip only updates AFTER the report is successfully read.
+                // Open a fresh browser (export browser already closed).
+                if (result.Status == "success" && !string.IsNullOrEmpty(result.ReportsUrl))
+                {
+                    try
+                    {
+                        using var rptPlaywright = await Microsoft.Playwright.Playwright.CreateAsync();
+                        var rptBrowser = await rptPlaywright.Chromium.LaunchAsync(
+                            AutodeskAutomation.Helpers.BrowserHelper.HeadlessOptions());
+                        try
+                        {
+                            var rptCtx = File.Exists(opts.AuthStatePath)
+                                ? await rptBrowser.NewContextAsync(new BrowserNewContextOptions
+                                    { StorageStatePath = opts.AuthStatePath })
+                                : await rptBrowser.NewContextAsync();
+                            var rptPage = await rptCtx.NewPageAsync();
+
+                            await NavigateToReportsAndCapture(
+                                rptPage, project, result.ReportsUrl,
+                                opts.UserEmail, result.ExportTriggeredAt);
+                        }
+                        finally { await rptBrowser.CloseAsync(); }
+                    }
+                    catch (Exception rptEx)
+                    {
+                        Console.WriteLine($"[reports] Browser error: {rptEx.Message}");
+                    }
+                }
+
+                // ── Update checkpoint and chips AFTER report is read ──────────────
                 if (result.Status == "success")
                 {
                     db.MarkCompleted(opts.UserEmail, "bim360", project);
                     results.Success++;
                     results.EmailsQueued += result.EmailsQueued;
-                    Console.WriteLine($"[bim360] âœ“ Marked COMPLETED: {project.Name} (user={opts.UserEmail ?? "null"})");
+                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                        message = $"[{project.Name}] DONE -- Completed saved for user={opts.UserEmail ?? "null"}, Done={results.Success}",
+                        platform = "bim360" });
                 }
                 else if (result.Status == "no_dm")
                 {
                     db.MarkNoDm(opts.UserEmail, "bim360", project);
                     results.NoDm++;
-                    Console.WriteLine($"[bim360] âŠ˜ Marked NO_DM: {project.Name} (user={opts.UserEmail ?? "null"})");
+                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                        message = $"[{project.Name}] No Data Management -- skipped (no_dm={results.NoDm})",
+                        platform = "bim360" });
                 }
                 else
                 {
                     results.Failed++;
+                    sse.Broadcast("log", new { level = "ERROR", timestamp = Now(),
+                        message = $"[{project.Name}] FAILED: {result.Error ?? "unknown error"} (failed={results.Failed})",
+                        platform = "bim360" });
                     db.LogError(opts.UserEmail, "bim360", runId, project, result.Error, screenshotPath);
                 }
 
@@ -306,7 +357,383 @@ namespace AutodeskAutomation.Services
             return results;
         }   // end RunBatchInternal
 
-        // BIM360 Document Log has no public REST API â€” always use browser automation.
+        // After export: navigate to Reports page, capture report rows + screenshots
+        private static async Task NavigateToReportsAndCapture(
+            IPage page, ProjectDocument project, string reportsUrl, string? userEmail,
+            DateTime exportTriggeredAt = default)
+        {
+            if (exportTriggeredAt == default) exportTriggeredAt = DateTime.Now.AddMinutes(-5);
+            var sse = SseService.Instance;
+            var downloadsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "storage", "downloads");
+            Directory.CreateDirectory(downloadsDir);
+            try
+            {
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Navigating to Reports page...",
+                    platform = "bim360" });
+
+                await page.GotoAsync(reportsUrl, new PageGotoOptions
+                    { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30_000 });
+                await Task.Delay(6000);  // give React SPA time to render
+                Console.WriteLine($"[reports] URL: {page.Url}");
+
+                // Wait for the report list table to load
+                // data-testid="report-list-table"
+                var table = page.Locator("[data-testid=\"report-list-table\"]");
+                // Wait up to 30s for the React SPA to render the reports table
+                bool tableFound = false;
+                for (int t = 0; t < 6; t++)  // 6 x 5s = 30s
+                {
+                    if (await table.CountAsync() > 0) { tableFound = true; break; }
+                    await Task.Delay(5000);
+                }
+
+                if (!tableFound)
+                {
+                    // Try reloading once more
+                    await page.ReloadAsync(new PageReloadOptions
+                        { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 15_000 });
+                    await Task.Delay(5000);
+                    tableFound = await table.CountAsync() > 0;
+                }
+
+                if (!tableFound)
+                {
+                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                        message = $"[{project.Name}] Reports table not found after 35s -- URL: {page.Url}",
+                        platform = "bim360" });
+                    return;
+                }
+
+                // Poll for a report row whose "Run at" datetime is AFTER exportTriggeredAt.
+                // The Reports table shows "Run at" in column 3 (index 2), newest first.
+                // Autodesk generates reports asynchronously -- can take up to 3 minutes.
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Waiting for report created after {exportTriggeredAt:HH:mm:ss} (local time)...",
+                    platform = "bim360" });
+
+                int targetRowIndex = -1;
+                int maxWaitSec = 180;
+                for (int w = 0; w < maxWaitSec / 10; w++)
+                {
+                    // Extract "Run at" datetime from each row using JavaScript
+                    var rowDatetimes = await page.EvaluateAsync<string[]>(
+                        "(function() {" +
+                        "  var rows = document.querySelectorAll('[data-testid^=\"report-list-table-row-\"]');" +
+                        "  return Array.from(rows).map(function(row) {" +
+                        "    var cells = row.querySelectorAll('td');" +
+                        "    return cells.length >= 3 ? (cells[2].innerText || '') : '';" +
+                        "  });" +
+                        "})()");
+
+                    if (rowDatetimes != null && rowDatetimes.Length > 0)
+                    {
+                        for (int ri = 0; ri < rowDatetimes.Length; ri++)
+                        {
+                            // Parse "Jun 4, 2026 11:07 AM" or similar
+                            var dtStr = rowDatetimes[ri].Trim();
+                            if (DateTime.TryParse(dtStr, out DateTime rowDt))
+                            {
+                                // Compare using local machine time (Reports page shows local time)
+                                if (rowDt >= exportTriggeredAt.AddSeconds(-30))
+                                {
+                                    targetRowIndex = ri;
+                                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                                        message = $"[{project.Name}] Found report row {ri} with datetime: {dtStr}",
+                                        platform = "bim360" });
+                                    break;
+                                }
+                            }
+                        }
+                        if (targetRowIndex >= 0) break;
+                    }
+
+                    // Refresh every 30s
+                    if (w > 0 && w % 3 == 0)
+                    {
+                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                            message = $"[{project.Name}] Waiting for report... ({w * 10}s elapsed)",
+                            platform = "bim360" });
+                        await page.ReloadAsync(new PageReloadOptions
+                            { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 15_000 });
+                        await Task.Delay(4000);
+                    }
+                    else
+                    {
+                        await Task.Delay(10_000);
+                    }
+                }
+
+                if (targetRowIndex < 0)
+                {
+                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                        message = $"[{project.Name}] No new report found after {maxWaitSec}s",
+                        platform = "bim360" });
+                    return;
+                }
+
+                // Use the specific row by index
+                var firstRow = page.Locator($"[data-testid=\"report-list-table-row-{targetRowIndex}\"]");
+
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Opening report menu to download Excel...",
+                    platform = "bim360" });
+
+                // Exponential retry for the download (5 attempts, delays: 0 2 4 8 16 seconds)
+                IDownload? download = null;
+                const int MaxDownloadAttempts = 5;
+                int delayMs = 0;
+
+                for (int attempt = 1; attempt <= MaxDownloadAttempts && download == null; attempt++)
+                {
+                    if (delayMs > 0)
+                    {
+                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                            message = $"[{project.Name}] Download retry {attempt}/{MaxDownloadAttempts} -- waiting {delayMs / 1000}s (exponential backoff)...",
+                            platform = "bim360" });
+                        await Task.Delay(delayMs);
+                    }
+
+                    // Reload the page on retries to ensure fresh menu state
+                    if (attempt > 1)
+                    {
+                        await page.ReloadAsync(new PageReloadOptions
+                            { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 15_000 });
+                        await Task.Delay(3000);
+                    }
+
+                    // Click the three-dot menu on the target row
+                    var menuBtn = page.Locator("[data-testid=\"table-row-menu\"]").First;
+                    if (await menuBtn.CountAsync() == 0)
+                    {
+                        delayMs = delayMs == 0 ? 2000 : delayMs * 2;
+                        continue;
+                    }
+
+                    await menuBtn.ClickAsync(new LocatorClickOptions { Force = true });
+                    await Task.Delay(800);
+
+                    // Try "Download" menu item
+                    var candidate = page.GetByRole(AriaRole.Menuitem, new() { Name = "Download" })
+                        .Or(page.Locator("[role=\"menuitem\"]")
+                            .Filter(new LocatorFilterOptions { HasText = "Download" }));
+
+                    if (await candidate.CountAsync() > 0)
+                    {
+                        try
+                        {
+                            var dlTask = page.WaitForDownloadAsync(
+                                new PageWaitForDownloadOptions { Timeout = 20_000 });
+                            await candidate.First.ClickAsync(new LocatorClickOptions { Force = true });
+                            download = await dlTask;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[reports] Download attempt {attempt} failed: {ex.Message}");
+                            // Close menu if still open
+                            await page.Keyboard.PressAsync("Escape").ConfigureAwait(false);
+                        }
+                    }
+                    else
+                    {
+                        await page.Keyboard.PressAsync("Escape").ConfigureAwait(false);
+                    }
+
+                    // Exponential backoff starting at 10s: 10s, 20s, 40s, 80s
+                    delayMs = delayMs == 0 ? 10_000 : delayMs * 2;
+                }
+
+                if (download == null)
+                {
+                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                        message = $"[{project.Name}] Download failed after {MaxDownloadAttempts} attempts",
+                        platform = "bim360" });
+                    return;
+                }
+
+                // Save the downloaded Excel file
+                var fileName = download.SuggestedFilename;
+                if (string.IsNullOrEmpty(fileName)) fileName = $"{project.ProjectId}-report.xlsx";
+                var filePath = Path.Combine(downloadsDir, fileName);
+                await download.SaveAsAsync(filePath);
+
+                Console.WriteLine($"[reports] Downloaded: {filePath}");
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Excel downloaded: {fileName}",
+                    platform = "bim360" });
+
+                // Read the Excel file and extract summary
+                await ReadExcelSummary(filePath, project, userEmail, sse);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[reports] Navigation failed (non-fatal): {ex.Message}");
+                sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                    message = $"[{project.Name}] Reports capture error: {ex.Message}",
+                    platform = "bim360" });
+            }
+        }
+
+        private static async Task ReadExcelSummary(
+            string filePath, ProjectDocument project, string? userEmail, SseService sse)
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    using var workbook = new ClosedXML.Excel.XLWorkbook(filePath);
+                    if (workbook.Worksheets.Count == 0) return;
+
+                    // The ACC Files Log Excel has 2 sheets:
+                    //   Sheet 1 "Overview"  — metadata (project name, total items, etc.)
+                    //   Sheet 2 "Files"     — one row per file with "File size" in col 14
+                    // Use the "Files" sheet if available, otherwise fall back to sheet 1.
+                    ClosedXML.Excel.IXLWorksheet ws;
+                    try   { ws = workbook.Worksheet("Files"); }
+                    catch { ws = workbook.Worksheet(workbook.Worksheets.Count > 1 ? 2 : 1); }
+
+                    var lastRow = ws.LastRowUsed();
+                    var lastCol = ws.LastColumnUsed();
+                    if (lastRow == null) return;
+
+                    int rowCount = lastRow.RowNumber();
+                    int colCount = lastCol?.ColumnNumber() ?? 0;
+
+                    // Read column headers from row 1
+                    var headers = new System.Collections.Generic.Dictionary<string, int>(
+                        StringComparer.OrdinalIgnoreCase);
+                    for (int c = 1; c <= colCount; c++)
+                    {
+                        var hdr = ws.Cell(1, c).GetValue<string>().Trim();
+                        if (!string.IsNullOrEmpty(hdr)) headers[hdr] = c;
+                    }
+
+                    var colList = string.Join(", ", headers.Keys);
+                    Console.WriteLine($"[excel] Columns found: {colList}");
+                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                        message = $"[{project.Name}] Excel columns: {colList}", platform = "bim360" });
+
+                    // Find the file size column -- case-insensitive, partial match
+                    // ACC Files Log typically uses "File size" or "Size"
+                    int sizeCol = 0;
+                    foreach (var hdr in headers)
+                    {
+                        var lower = hdr.Key.ToLowerInvariant();
+                        if (lower.IndexOf("size") >= 0 || lower.IndexOf("bytes") >= 0)
+                        {
+                            sizeCol = hdr.Value;
+                            Console.WriteLine($"[excel] Using size column: '{hdr.Key}' (col {sizeCol})");
+                            sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                                message = $"[{project.Name}] File size column: '{hdr.Key}'", platform = "bim360" });
+                            break;
+                        }
+                    }
+
+                    // Count total files (data rows) and sum total size
+                    int totalFiles = rowCount - 1;  // exclude header row
+                    long totalSizeBytes = 0;
+                    int sizeParseErrors = 0;
+
+                    if (sizeCol > 0)
+                    {
+                        for (int r = 2; r <= rowCount; r++)
+                        {
+                            // Try to get as numeric first (most reliable for byte values)
+                            // ACC Files Log format: "7.3 KB", "1,002.7 KB", "3.7 MB", "385 B"
+                            // Always read as string and parse the unit
+                            var cellVal = ws.Cell(r, sizeCol).GetValue<string>().Trim();
+                            if (string.IsNullOrEmpty(cellVal) || cellVal == "--") continue;
+
+                            // Strip commas from numbers like "1,002.7 KB" -> "1002.7 KB"
+                            var normalized = cellVal.Replace(",", "");
+                            // Extract the numeric part (digits and decimal point only)
+                            var cleaned = System.Text.RegularExpressions.Regex
+                                .Replace(normalized, @"[^\d\.]", "");
+                            if (double.TryParse(cleaned,
+                                System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                out double sizeVal))
+                            {
+                                var upper = normalized.ToUpperInvariant();
+                                if (upper.IndexOf(" GB") >= 0 || upper.EndsWith("GB"))
+                                    totalSizeBytes += (long)(sizeVal * 1024 * 1024 * 1024);
+                                else if (upper.IndexOf(" MB") >= 0 || upper.EndsWith("MB"))
+                                    totalSizeBytes += (long)(sizeVal * 1024 * 1024);
+                                else if (upper.IndexOf(" KB") >= 0 || upper.EndsWith("KB"))
+                                    totalSizeBytes += (long)(sizeVal * 1024);
+                                else  // "B" or plain number → bytes
+                                    totalSizeBytes += (long)sizeVal;
+                            }
+                            else sizeParseErrors++;
+                        }
+                    }
+
+                    // Format total size for display
+                    string totalSizeStr = totalSizeBytes > 0
+                        ? FormatBytes(totalSizeBytes)
+                        : (sizeCol == 0 ? "(size column not found)" : "(could not parse)");
+
+                    var summaryText =
+                        $"Project: {project.Name}\n" +
+                        $"File: {Path.GetFileName(filePath)}\n" +
+                        $"Total Files: {totalFiles:N0}\n" +
+                        $"Total File Size: {totalSizeStr}\n" +
+                        $"Columns: {string.Join(", ", headers.Keys)}";
+
+                    Console.WriteLine($"[excel] {summaryText}");
+                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                        message = $"[{project.Name}] Files Log Summary:\n{summaryText}",
+                        platform = "bim360" });
+
+                    // Also broadcast a dedicated summary event for the UI
+                    sse.Broadcast("files-log-summary", new
+                    {
+                        projectId   = project.ProjectId,
+                        projectName = project.Name,
+                        totalFiles,
+                        totalSizeBytes,
+                        totalSizeFormatted = totalSizeStr,
+                        platform    = "bim360"
+                    });
+
+                    // Save to RavenDB -- include total files + size in the title/notes
+                    var db = DatabaseService.Instance;
+                    using var session = db.OpenSession();
+                    var docId = $"reports/excel/{System.Text.RegularExpressions.Regex.Replace(project.ProjectId, @"[^\w]", "")}";
+                    var existing = session.Load<Models.Documents.ReportDocument>(docId);
+                    var doc = existing ?? new Models.Documents.ReportDocument { Id = docId };
+                    doc.ProjectId   = project.ProjectId;
+                    doc.UserEmail   = userEmail;
+                    doc.Platform    = "bim360";
+                    doc.Title       = $"{Path.GetFileName(filePath)} | {totalFiles:N0} files | {totalSizeStr}";
+                    doc.Status      = "complete";
+                    doc.DownloadUrl = filePath;
+                    doc.ErrorMessage = $"Total files: {totalFiles:N0}, Total size: {totalSizeStr}";
+                    doc.CompletedAt = DateTime.UtcNow;
+                    doc.FirstSeenAt = doc.FirstSeenAt == default ? DateTime.UtcNow : doc.FirstSeenAt;
+                    doc.LastSeenAt  = DateTime.UtcNow;
+                    if (existing == null) session.Store(doc);
+                    session.SaveChanges();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[excel] Read failed: {ex.Message}");
+                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                        message = $"[{project.Name}] Excel read failed: {ex.Message}",
+                        platform = "bim360" });
+                }
+            });
+        }
+
+
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:0.##} GB";
+            if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:0.##} MB";
+            if (bytes >= 1_024)         return $"{bytes / 1_024.0:0.##} KB";
+            return $"{bytes} B";
+        }
+        // BIM360 Document Log has no public REST API -- always use browser automation.
         private static Task<ExportResult?> TryApiExport(
             ProjectDocument project, BatchOptions opts, SseService sse)
             => Task.FromResult<ExportResult?>(null);
@@ -318,6 +745,9 @@ namespace AutodeskAutomation.Services
         {
             var start = DateTime.UtcNow;
             int emailsQueued = 0;
+            // Set if ACC export -- allows report capture AFTER chips update
+            string? reportsUrlForCapture = null;
+            DateTime exportTimeForCapture = default;
 
             try
             {
@@ -325,7 +755,11 @@ namespace AutodeskAutomation.Services
                 if (resolved == null)
                     return new ExportResult { Status = "no_dm", Duration = (DateTime.UtcNow - start).TotalMilliseconds };
 
-                // Begin report tracker â€” snapshot existing reports before triggering
+                // Capture URL immediately -- BEFORE ExportRun.Begin which may navigate the page
+                var currentUrl = picker.Page.Url;
+                Console.WriteLine($"[bim360] Post-navigation URL: {currentUrl}");
+
+                // Begin report tracker --  snapshot existing reports before triggering
                 ExportRun? tracker = null;
                 try
                 {
@@ -345,26 +779,39 @@ namespace AutodeskAutomation.Services
                     Console.WriteLine($"[tracker] begin failed (non-fatal): {ex.Message}");
                 }
 
-                // Export Plans root
-                try
+                if (currentUrl.Contains("/docs/files/") || currentUrl.Contains("acc.autodesk.com"))
                 {
-                    await rootSel.SelectRoot("Plans");
+                    //  ACC docs/files page: Export -> Files Log
+                    Console.WriteLine($"[bim360] ACC docs/files page -- clicking Export -> Files Log");
+                    var exportTriggeredAt = await dialog.OpenAndExport();
+                    emailsQueued++;
+
+                    //  Will be set on the return value for deferred capture after chips update
+                    reportsUrlForCapture  = $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}";
+                    exportTimeForCapture  = exportTriggeredAt;
+                }
+                else
+                {
+                    //  BIM360 admin page: Plans + Project Files (2 exports) ────────
+                    try
+                    {
+                        await rootSel.SelectRoot("Plans");
+                        await dialog.OpenAndExport();
+                        emailsQueued++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[bim360] Plans root failed for {project.Name}: {ex.Message}");
+                        try { await picker.Page.Keyboard.PressAsync("Escape"); } catch { }
+                        await Task.Delay(600);
+                    }
+
+                    await rootSel.SelectRoot("Project Files");
                     await dialog.OpenAndExport();
                     emailsQueued++;
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[bim360] Plans root failed for {project.Name}: {ex.Message}");
-                    try { await picker.Page.Keyboard.PressAsync("Escape"); } catch { }
-                    await Task.Delay(600);
-                }
 
-                // Export Project Files root
-                await rootSel.SelectRoot("Project Files");
-                await dialog.OpenAndExport();
-                emailsQueued++;
-
-                // Finalize tracker â€” poll for new reports (up to 90s)
+                // Finalize tracker --  poll for new reports (up to 90s)
                 if (tracker != null)
                 {
                     try { await tracker.FinalizeAsync(pollIntervalMs: 7000, maxWaitMs: 90_000); }
@@ -374,8 +821,32 @@ namespace AutodeskAutomation.Services
                     }
                 }
 
-                return new ExportResult { Status = "success",
-                    Duration = (DateTime.UtcNow - start).TotalMilliseconds, EmailsQueued = emailsQueued };
+                return new ExportResult
+                {
+                    Status = "success",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds,
+                    EmailsQueued = emailsQueued,
+                    // ACC deferred report capture fields
+                    ReportsUrl = reportsUrlForCapture,
+                    ExportTriggeredAt = exportTimeForCapture
+                };
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("no_dm"))
+            {
+                // Explicit no_dm thrown when toolbar/Document log not found
+                return new ExportResult { Status = "no_dm",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds };
+            }
+            catch (Exception ex) when (
+                ex.Message.Contains("Execution context was destroyed") ||
+                ex.Message.Contains("context was destroyed") ||
+                ex.Message.Contains("most likely because of a navigation") ||
+                ex.Message.Contains("Target page, context or browser has been closed"))
+            {
+                // Page navigated away during operation = no stable Data Management context
+                Console.WriteLine($"[bim360] Navigation destroyed context -- treating as no_dm: {ex.Message}");
+                return new ExportResult { Status = "no_dm",
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds };
             }
             catch (Exception ex)
             {
@@ -391,6 +862,11 @@ namespace AutodeskAutomation.Services
         public string? Error { get; set; }
         public double Duration { get; set; }
         public int EmailsQueued { get; set; }
+
+        // ACC deferred report capture -- set by ExportDocumentLog so batch loop
+        // can update chips immediately, then open a NEW browser for the report
+        public string? ReportsUrl { get; set; }
+        public DateTime ExportTriggeredAt { get; set; }
     }
 }
 

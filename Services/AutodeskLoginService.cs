@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -40,24 +40,24 @@ namespace AutodeskAutomation.Services
                     sse.Broadcast("log", new { level = "INFO", message = $"[Login] {msg}", platform = "auth" });
                 }
 
-                Log("Starting login — creating temp storage directory…");
+                Log("Starting login -- creating temp storage directory...");
                 var tempAuthPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                     "storage", ".temp-auth-state.json");
                 var tempDir = Path.GetDirectoryName(tempAuthPath);
                 if (tempDir != null) Directory.CreateDirectory(tempDir);
                 Log($"Temp path: {tempAuthPath}");
 
-                Log("Initialising Playwright…");
+                Log("Initialising Playwright...");
                 using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
-                Log("Playwright ready. Launching Chrome…");
+                Log("Playwright ready. Launching Chrome...");
 
                 var launchOpts = BrowserHelper.HeadedOptions();
                 Log($"Chrome executable: {launchOpts.ExecutablePath ?? "(Playwright default)"}");
                 var browser = await playwright.Chromium.LaunchAsync(launchOpts);
-                Log("Chrome launched. Creating context…");
+                Log("Chrome launched. Creating context...");
                 var context = await browser.NewContextAsync(new BrowserNewContextOptions { ViewportSize = null });
                 var page = await context.NewPageAsync();
-                Log("Browser ready — navigating to acc.autodesk.com…");
+                Log("Browser ready -- navigating to acc.autodesk.com...");
 
                 // Capture first Bearer token from any Autodesk API domain
                 string? capturedAuth = null;
@@ -65,7 +65,7 @@ namespace AutodeskAutomation.Services
                 {
                     if (capturedAuth != null) return;
                     var reqUrl = req.Url;
-                    // Broad filter — catch any autodesk.com API call with a Bearer token
+                    // Broad filter -- catch any autodesk.com API call with a Bearer token
                     if (!reqUrl.Contains("autodesk.com") && !reqUrl.Contains("autodesk.io")) return;
                     if (req.Headers.TryGetValue("authorization", out var auth) &&
                         auth.StartsWith("Bearer "))
@@ -98,16 +98,16 @@ namespace AutodeskAutomation.Services
                                 await Task.Delay(2000);
                         }
 
-                        // ── Navigate to BIM360 admin and wait for full authentication ─────────
+                        //  Navigate to BIM360 admin and wait for full authentication ─────────
                         // The export browser needs cookies for admin.b360.autodesk.com.
                         // We navigate there now so the user can complete BIM360 sign-in
                         // interactively if it shows a login page.
-                        Log("Navigating to admin.b360.autodesk.com — sign in if prompted…");
+                        Log("Navigating to admin.b360.autodesk.com -- sign in if prompted...");
                         sse.Broadcast("login-status", new
                         {
                             status  = "waiting",
                             elapsed = srv.LoginElapsedSeconds,
-                            message = "Connecting to BIM360 admin — sign in if a login page appears in the browser…"
+                            message = "Connecting to BIM360 admin -- sign in if a login page appears in the browser..."
                         });
 
                         try
@@ -174,7 +174,7 @@ namespace AutodeskAutomation.Services
                     }
                 }
 
-                // Fallback chain: existing active user → Cloudsfer session email → "autodesk-user"
+                // Fallback chain: existing active user -> Cloudsfer session email -> "autodesk-user"
                 if (string.IsNullOrEmpty(detectedEmail) && srv.ActiveUser != null)
                 {
                     detectedEmail = srv.ActiveUser;
@@ -188,7 +188,7 @@ namespace AutodeskAutomation.Services
                 if (string.IsNullOrEmpty(detectedEmail))
                 {
                     detectedEmail = "autodesk-user";
-                    Console.WriteLine("[login] Could not detect email — using default slug.");
+                    Console.WriteLine("[login] Could not detect email -- using default slug.");
                 }
 
                 // Write user-specific auth state for both platforms

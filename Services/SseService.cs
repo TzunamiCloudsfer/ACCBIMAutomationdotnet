@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Channels;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace AutodeskAutomation.Services
 {
@@ -34,9 +35,16 @@ namespace AutodeskAutomation.Services
                 ch.Writer.TryComplete();
         }
 
+        // Use camelCase so app.js (which reads data.results.success, data.platform etc.) works correctly
+        private static readonly JsonSerializerSettings _camelCase = new JsonSerializerSettings
+        {
+            ContractResolver = new CamelCasePropertyNamesContractResolver(),
+            NullValueHandling = NullValueHandling.Ignore
+        };
+
         public void Broadcast(string type, object data)
         {
-            var payload = $"data: {JsonConvert.SerializeObject(new { type, data })}\n\n";
+            var payload = $"data: {JsonConvert.SerializeObject(new { type, data }, _camelCase)}\n\n";
             foreach (var kv in _clients)
             {
                 try { kv.Value.Writer.TryWrite(payload); }

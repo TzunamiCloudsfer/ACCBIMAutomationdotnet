@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Web;
 using AutodeskAutomation.Helpers;
@@ -11,7 +11,7 @@ namespace AutodeskAutomation
     {
         protected void Application_Start(object sender, EventArgs e)
         {
-            // ── Connect to RavenDB (retry up to 30 s to allow server startup) ─────
+            //  Connect to RavenDB (retry up to 30 s to allow server startup) ─────
             Exception? lastEx = null;
             for (int attempt = 1; attempt <= 10; attempt++)
             {
@@ -27,7 +27,7 @@ namespace AutodeskAutomation
                     if (attempt < 10)
                     {
                         System.Diagnostics.Trace.TraceWarning(
-                            $"[RavenDB] Connection attempt {attempt}/10 failed: {ex.Message} — retrying in 3s…");
+                            $"[RavenDB] Connection attempt {attempt}/10 failed: {ex.Message} -- retrying in 3s...");
                         System.Threading.Thread.Sleep(3000);
                     }
                 }
@@ -39,7 +39,7 @@ namespace AutodeskAutomation
                     "(run C:\\RavenDB\\Install-Service.ps1 as Administrator to register it as a service).\n\n" +
                     "Original error: " + lastEx.Message, lastEx);
 
-            // ── Restore last logged-in Autodesk user across restarts ─────────────
+            //  Restore last logged-in Autodesk user across restarts ─────────────
             var lastUser = DatabaseService.Instance.GetLastUser();
             if (!string.IsNullOrEmpty(lastUser))
             {
@@ -48,19 +48,19 @@ namespace AutodeskAutomation
                 srv.ActiveUserSlug = SlugHelper.EmailToSlug(lastUser);
             }
 
-            // ── Ensure Playwright Chromium browser is installed ───────────────────
-            // Runs silently in the background — does nothing if already installed
+            //  Ensure Playwright Chromium browser is installed ───────────────────
+            // Runs silently in the background -- does nothing if already installed
             System.Threading.Tasks.Task.Run(() =>
             {
                 try { Microsoft.Playwright.Program.Main(new[] { "install", "chromium" }); }
                 catch (Exception ex) { System.Diagnostics.Trace.TraceWarning("[Playwright] install: " + ex.Message); }
             });
 
-            // ── Ensure storage directories exist ─────────────────────────────────
+            //  Ensure storage directories exist ─────────────────────────────────
             var storageRoot = Path.Combine(HttpRuntime.AppDomainAppPath, "storage");
             Directory.CreateDirectory(storageRoot);
 
-            // ── Migrate any legacy file-based project data into RavenDB ─────────
+            //  Migrate any legacy file-based project data into RavenDB ─────────
             var db = DatabaseService.Instance;
             var slug = ServerState.Instance.ActiveUserSlug;
             if (!string.IsNullOrEmpty(slug))
@@ -79,7 +79,7 @@ namespace AutodeskAutomation
 
         protected void Application_End(object sender, EventArgs e)
         {
-            // Clean shutdown — stop any running exports
+            // Clean shutdown -- stop any running exports
             AccBatchService.Instance.Stop();
             Bim360BatchService.Instance.Stop();
         }

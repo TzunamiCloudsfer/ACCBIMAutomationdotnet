@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -21,7 +21,7 @@ namespace AutodeskAutomation.Services
         private IDocumentStore _store = null!;
         private const string DbName = "AutodeskAutomation";
 
-        // Configurable — override in Web.config appSettings key "RavenDbUrl"
+        // Configurable -- override in Web.config appSettings key "RavenDbUrl"
         public static string ServerUrl { get; set; } = "http://localhost:8080";
 
         private DatabaseService() { }
@@ -47,17 +47,17 @@ namespace AutodeskAutomation.Services
             }
             catch (Exception ex) when (ex.Message.Contains("already exist") || ex.GetType().Name.Contains("AlreadyExists"))
             {
-                // Expected on subsequent startups — database already created
+                // Expected on subsequent startups -- database already created
             }
 
-            // Note: AppSession expiry is handled lazily in GetAppSession() — expired
+            // Note: AppSession expiry is handled lazily in GetAppSession() -- expired
             // sessions are deleted on read. Automatic RavenDB TTL cleanup requires a
             // paid license (free license minimum is 36 hours), so we skip it here.
 
             Console.WriteLine($"[db] Connected to RavenDB at {ServerUrl}, database: {DbName}");
         }
 
-        // ── Helpers ──────────────────────────────────────────────────────────────
+        //  Helpers ──────────────────────────────────────────────────────────────
         private static string U(string? email) => email ?? "__global__";
         private static string SettingId(string? email, string platform, string key)
             => $"settings/{U(email)}/{platform}/{key}";
@@ -70,7 +70,7 @@ namespace AutodeskAutomation.Services
         private static string SessionId(string token)
             => $"appsessions/{token}";
 
-        // ── Settings ──────────────────────────────────────────────────────────────
+        //  Settings ──────────────────────────────────────────────────────────────
         public string? GetSetting(string? userEmail, string platform, string key)
         {
             using var session = _store.OpenSession();
@@ -106,7 +106,7 @@ namespace AutodeskAutomation.Services
         public string? GetLastUser()
             => GetSetting(null, "system", "lastActiveUser");
 
-        // ── Auth Users ────────────────────────────────────────────────────────────
+        //  Auth Users ────────────────────────────────────────────────────────────
         public void CreateAuthUser(string email, string password)
         {
             var salt = new byte[16];
@@ -158,7 +158,7 @@ namespace AutodeskAutomation.Services
             return Convert.ToBase64String(pbkdf2.GetBytes(64));
         }
 
-        // ── App Sessions ──────────────────────────────────────────────────────────
+        //  App Sessions ──────────────────────────────────────────────────────────
         public void CreateAppSession(string token, string userEmail, TimeSpan ttl)
         {
             using var session = _store.OpenSession();
@@ -200,7 +200,7 @@ namespace AutodeskAutomation.Services
             session.SaveChanges();
         }
 
-        // ── Projects ──────────────────────────────────────────────────────────────
+        //  Projects ──────────────────────────────────────────────────────────────
         public List<ProjectDocument> GetProjects(string? userEmail, string platform)
         {
             using var session = _store.OpenSession();
@@ -268,7 +268,7 @@ namespace AutodeskAutomation.Services
             session.SaveChanges();
         }
 
-        // ── Checkpoints ───────────────────────────────────────────────────────────
+        //  Checkpoints ───────────────────────────────────────────────────────────
         public CheckpointData LoadCheckpoint(string? userEmail, string platform)
         {
             using var session = _store.OpenSession();
@@ -340,7 +340,7 @@ namespace AutodeskAutomation.Services
             session.SaveChanges();
         }
 
-        // ── Export Runs ───────────────────────────────────────────────────────────
+        //  Export Runs ───────────────────────────────────────────────────────────
         public string CreateRun(string? userEmail, string platform)
         {
             using var session = _store.OpenSession();
@@ -394,7 +394,7 @@ namespace AutodeskAutomation.Services
             session.SaveChanges();
         }
 
-        // ── Error Logs ────────────────────────────────────────────────────────────
+        //  Error Logs ────────────────────────────────────────────────────────────
         public string LogError(string? userEmail, string platform, string? runId,
             ProjectDocument? project, string? errorMessage, string? screenshotPath)
         {
@@ -437,7 +437,7 @@ namespace AutodeskAutomation.Services
             session.SaveChanges();
         }
 
-        // ── Migration from JSON files (one-time import on startup) ────────────────
+        //  Migration from JSON files (one-time import on startup) ────────────────
         public void MigrateProjectsFromFile(string? userEmail, string platform, string filePath)
         {
             try
@@ -471,7 +471,7 @@ namespace AutodeskAutomation.Services
                     }
                 }
             }
-            catch { /* no file or parse error — skip silently */ }
+            catch { /* no file or parse error -- skip silently */ }
         }
 
         public void MigrateCheckpointFromFile(string? userEmail, string platform, string filePath)
@@ -501,11 +501,11 @@ namespace AutodeskAutomation.Services
             catch { /* skip */ }
         }
 
-        // ── Raw session access (for services that store custom documents) ─────────
+        //  Raw session access (for services that store custom documents) ─────────
         public Raven.Client.Documents.Session.IDocumentSession OpenSession()
             => _store.OpenSession();
 
-        // ── Autodesk OAuth Tokens ─────────────────────────────────────────────────
+        //  Autodesk OAuth Tokens ─────────────────────────────────────────────────
         private static string TokenId(string? userEmail)
             => $"autodesk-tokens/{U(userEmail)}";
 

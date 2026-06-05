@@ -57,6 +57,7 @@
   </ItemGroup>
   <!-- NuGet packages via PackageReference (NuGet 4+ / VS 2017+) -->
   <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.102.2" />
     <PackageReference Include="Microsoft.Owin" Version="4.2.2" />
     <PackageReference Include="Microsoft.Owin.Host.SystemWeb" Version="4.2.2" />
     <PackageReference Include="Microsoft.Owin.StaticFiles" Version="4.2.2" />

@@ -53,7 +53,7 @@ namespace AutodeskAutomation.Services
             _startedAt     = startedAt;
         }
 
-        // â”€â”€ begin: snapshot existing report IDs before triggering export â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // "" begin: snapshot existing report IDs before triggering export """""""""
         public static async Task<ExportRun> Begin(IPage page, ExportRunMeta meta)
         {
             var runId     = Guid.NewGuid().ToString("N");
@@ -120,7 +120,7 @@ namespace AutodeskAutomation.Services
             set => _capturedBearerField = value;
         }
 
-        // â”€â”€ sweep: fetch reports, save new ones (set-difference) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // "" sweep: fetch reports, save new ones (set-difference) """""""""""""""""
         public async Task<List<JObject>> Sweep()
         {
             // Refresh bearer from page if available
@@ -187,7 +187,7 @@ namespace AutodeskAutomation.Services
             return saved;
         }
 
-        // â”€â”€ finalize: poll until expected reports appear or timeout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // "" finalize: poll until expected reports appear or timeout """""""""""""""
         public async Task<List<ReportDocument>> FinalizeAsync(
             int pollIntervalMs = 7000, int maxWaitMs = 60_000)
         {
@@ -226,7 +226,7 @@ namespace AutodeskAutomation.Services
             UpdateRunStatus("failed", reason);
         }
 
-        // â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // "" helpers """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
         private static async Task<List<JObject>> ListReports(
             IPage? page, string projectId, string productId, string? bearer)
         {

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /* ═══════════════════════════════════════════════════════════════════════════
    Autodesk Automation Platform — Unified Client Application
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -379,7 +379,7 @@ function handleEvent(type, data) {
       }
       refreshPlatformStats(); // update pending counts in platform tab
       // Reload project list so status changes to "completed" are visible
-      if (A.page === 'projects') loadProjects();
+      loadProjects(); // refresh regardless of current page
       if (isCurrentPlatform) {
         A.exportStatus = 'complete'; A.exportPaused = false;
         A.results = { ...data.results };
@@ -1209,7 +1209,7 @@ function syncChips() {
   const r = A.results;
   setText('chip-success', r.success || 0);
   setText('chip-failed',  r.failed  || 0);
-  setText('chip-nodm',    r.no_dm   || 0);
+  setText('chip-nodm',    r.no_dm || r.noDm || 0);
   setText('chip-skipped', r.skipped || 0);
 }
 

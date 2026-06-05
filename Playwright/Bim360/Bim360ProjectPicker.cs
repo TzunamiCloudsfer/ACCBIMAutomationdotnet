@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using AutodeskAutomation.Models.Documents;
 using Microsoft.Playwright;
@@ -19,143 +18,168 @@ namespace AutodeskAutomation.Playwright.Bim360
 
         public async Task<string?> NavigateToDataManagement(ProjectDocument project)
         {
-            if (string.IsNullOrEmpty(_accountId))
-                throw new Exception($"AccountId is empty for project '{project.Name}'");
+            Log(project.Name, "Checking for Data Management...");
 
-            var url = $"https://admin.b360.autodesk.com/admin/{_accountId}/projects/{project.ProjectId}";
-            Console.WriteLine($"[bim360] â†’ {url}");
+            //  Strategy 1: ACC project-admin page ───────────────────────────────
+            // Newer BIM360/ACC projects: acc.autodesk.com/project-admin/members/projects/{id}
+            // The "Data Management" product picker item:
+            //   <a data-testid="ProductPicker__product-docs" href="/docs/files/projects/{id}">
+            var accAdminUrl = $"https://acc.autodesk.com/project-admin/members/projects/{project.ProjectId}";
+            var result = await TryAccAdminFlow(project, accAdminUrl);
+            if (result != null) return result;
 
-            await Page.GotoAsync(url, new PageGotoOptions
-                { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 60_000 });
-            await Stabilize(3000);
+            //  Strategy 2: Legacy BIM360 admin (admin.b360.autodesk.com) ────────
+            if (!string.IsNullOrEmpty(_accountId))
+                return await TryBim360AdminFlow(project);
 
-            var landed = Page.Url;
-            Console.WriteLine($"[bim360] Landed: {landed}");
+            Log(project.Name, "No accountId -- no_dm");
+            return null;
+        }
 
-            // Session expired
-            if (landed.Contains("identity.autodesk") || landed.Contains("login.autodesk") ||
-                landed.Contains("signin.autodesk") || landed.Contains("accounts.autodesk"))
-                throw new Exception("Autodesk session expired â€” please click Login to re-authenticate.");
-
-            if (!landed.Contains("autodesk.com"))
-            {
-                Console.WriteLine($"[bim360] Redirected off Autodesk â€” marking as no_dm");
-                return null;
-            }
-
-            var opened = await OpenDocumentManagement(project);
-            if (!opened) return null;
-
-            // Wait for the DM folder tree (Plans or Project Files) â€” up to 60s
+                //  ACC docs/files direct navigation ───────────────────────────────────────
+        // The Data Management link sits inside a floating-ui tooltip that only exists
+        // in the DOM when the product picker trigger is hovered. Instead of waiting
+        // for that, navigate directly to the well-known docs/files URL.
+        private async Task<string?> TryAccAdminFlow(ProjectDocument project, string url)
+        {
+            var docsUrl = $"https://acc.autodesk.com/docs/files/projects/{project.ProjectId}";
+            Console.WriteLine($"[bim360] ACC docs/files direct -> {docsUrl}");
             try
             {
-                var plansNode = Page.GetByRole(AriaRole.Treeitem, new() { Name = "Plans" })
-                    .Or(Page.Locator("[title=\"Plans\"]").First)
-                    .Or(Page.GetByText("Plans", new() { Exact = true }).First);
-                await plansNode.First.WaitForAsync(new LocatorWaitForOptions
-                    { State = WaitForSelectorState.Visible, Timeout = 60_000 });
+                await Page.GotoAsync(docsUrl, new PageGotoOptions
+                    { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30_000 });
+                await Task.Delay(4000);
+
+                var landed = Page.Url;
+                Console.WriteLine($"[bim360] ACC docs/files landed: {landed}");
+
+                if (IsSignInPage(landed))
+                    throw new Exception("Autodesk session expired -- please click Login.");
+
+                // If redirected away from docs/files, project has no Data Management
+                if (!landed.Contains("/docs/files/"))
+                {
+                    Log(project.Name, $"No Data Management -- redirected to {landed}");
+                    return null;
+                }
+
+                Log(project.Name, $"Data Management page loaded: {landed}");
+                return project.Name;
             }
-            catch
+            catch (Exception ex) when (ex.Message.Contains("session expired")) { throw; }
+            catch (Exception ex)
             {
+                Console.WriteLine($"[bim360] ACC docs/files error: {ex.Message}");
+                return null;
+            }
+        }
+        //  Legacy BIM360 admin ───────────────────────────────────────────────────
+        private async Task<string?> TryBim360AdminFlow(ProjectDocument project)
+        {
+            var url = $"https://admin.b360.autodesk.com/admin/{_accountId}/projects/{project.ProjectId}";
+            Console.WriteLine($"[bim360] BIM360 admin -> {url}");
+            try
+            {
+                await Page.GotoAsync(url, new PageGotoOptions
+                    { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 60_000 });
+                await Task.Delay(3000);
+
+                var landed = Page.Url;
+                if (IsSignInPage(landed)) throw new Exception("Autodesk session expired -- please click Login.");
+                if (!landed.Contains("autodesk.com")) return null;
+
+                var opened = await OpenDocumentManagement(project);
+                if (!opened) return null;
+
                 try
                 {
-                    var pfNode = Page.GetByRole(AriaRole.Treeitem, new() { Name = "Project Files" })
-                        .Or(Page.Locator("[title=\"Project Files\"]").First)
-                        .Or(Page.GetByText("Project Files", new() { Exact = true }).First);
-                    await pfNode.First.WaitForAsync(new LocatorWaitForOptions
-                        { State = WaitForSelectorState.Visible, Timeout = 30_000 });
+                    var plans = Page.GetByRole(AriaRole.Treeitem, new() { Name = "Plans" })
+                        .Or(Page.Locator("[title=\"Plans\"]").First)
+                        .Or(Page.GetByText("Plans", new() { Exact = true }).First);
+                    await plans.First.WaitForAsync(new LocatorWaitForOptions
+                        { State = WaitForSelectorState.Visible, Timeout = 60_000 });
                 }
                 catch
                 {
-                    Console.WriteLine($"[bim360] DM folder tree did not load â€” marking as no_dm");
-                    return null;
+                    try
+                    {
+                        var pf = Page.GetByRole(AriaRole.Treeitem, new() { Name = "Project Files" })
+                            .Or(Page.Locator("[title=\"Project Files\"]").First)
+                            .Or(Page.GetByText("Project Files", new() { Exact = true }).First);
+                        await pf.First.WaitForAsync(new LocatorWaitForOptions
+                            { State = WaitForSelectorState.Visible, Timeout = 30_000 });
+                    }
+                    catch { Log(project.Name, "DM folder tree did not load -- no_dm"); return null; }
                 }
+                return project.Name;
             }
-
-            Console.WriteLine($"[bim360] Document Management loaded for: {project.Name}");
-            return project.Name;
+            catch (Exception ex) when (ex.Message.Contains("session expired")) { throw; }
+            catch (Exception ex) { Console.WriteLine($"[bim360] BIM360 error: {ex.Message}"); return null; }
         }
 
         private async Task<bool> OpenDocumentManagement(ProjectDocument project)
         {
-            // â”€â”€ Strategy A: Click "Project Admin â–¼" dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            Console.WriteLine($"[bim360] Opening Project Admin dropdownâ€¦");
             try
             {
                 var trigger = Page.Locator("a, button, div, span")
                     .Filter(new LocatorFilterOptions
-                    {
-                        Has = Page.Locator(":text-matches(\"^project admin$\", \"i\")")
-                    }).First;
-
+                        { Has = Page.Locator(":text-matches(\"^project admin$\", \"i\")") }).First;
                 await DismissPendoOverlay();
                 await trigger.WaitForAsync(new LocatorWaitForOptions
                     { State = WaitForSelectorState.Visible, Timeout = 8_000 });
                 await trigger.ClickAsync(new LocatorClickOptions { Force = true });
-                await Stabilize(1500);
+                await Task.Delay(1500);
 
                 var dmLink = Page.GetByRole(AriaRole.Link, new() { Name = "document management" })
                     .Or(Page.GetByText("Document Management", new() { Exact = true }).First);
                 await dmLink.First.WaitForAsync(new LocatorWaitForOptions
                     { State = WaitForSelectorState.Visible, Timeout = 10_000 });
-                Console.WriteLine($"[bim360] Clicking Document Management (dropdown)â€¦");
                 await dmLink.First.ClickAsync(new LocatorClickOptions { Force = true });
                 await Page.WaitForLoadStateAsync(LoadState.DOMContentLoaded,
-                    new PageWaitForLoadStateOptions { Timeout = 30_000 }).ConfigureAwait(false);
-                await Stabilize(3000);
-
-                var after = Page.Url;
-                Console.WriteLine($"[bim360] After DM click: {after}");
-
-                var adminBase = $"admin.b360.autodesk.com/admin/{_accountId}/projects/{project.ProjectId}";
-                if (!after.Contains(adminBase)) return true;  // navigated away = success
-
-                Console.WriteLine($"[bim360] Dropdown DM click didn't navigate â€” trying direct link");
+                    new PageWaitForLoadStateOptions { Timeout = 30_000 });
+                await Task.Delay(3000);
+                if (!Page.Url.Contains($"projects/{project.ProjectId}")) return true;
             }
-            catch
-            {
-                Console.WriteLine($"[bim360] Dropdown approach failed â€” trying direct link");
-            }
+            catch { }
 
-            // â”€â”€ Strategy B: Wait for direct "Document Management" link â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-            Console.WriteLine($"[bim360] Waiting for Document Management link (15s)â€¦");
             try
             {
                 var direct = Page.GetByRole(AriaRole.Link, new() { Name = "document management" });
                 await DismissPendoOverlay();
                 await direct.First.WaitForAsync(new LocatorWaitForOptions
                     { State = WaitForSelectorState.Visible, Timeout = 15_000 });
-                Console.WriteLine($"[bim360] Clicking Document Management (direct link)â€¦");
                 await direct.First.ClickAsync(new LocatorClickOptions { Force = true });
                 await Page.WaitForLoadStateAsync(LoadState.DOMContentLoaded,
-                    new PageWaitForLoadStateOptions { Timeout = 30_000 }).ConfigureAwait(false);
-                await Stabilize(3000);
-                Console.WriteLine($"[bim360] After DM click: {Page.Url}");
+                    new PageWaitForLoadStateOptions { Timeout = 30_000 });
+                await Task.Delay(3000);
                 return true;
             }
             catch { }
-
-            Console.WriteLine($"[bim360] Document Management not found â€” marking as no_dm");
             return false;
         }
 
         public async Task DismissPendoOverlay()
         {
             try { await Page.Keyboard.PressAsync("Escape"); } catch { }
-            try
-            {
-                await Page.EvaluateAsync(@"() => {
-                    document.querySelectorAll(
-                        '#pendo-base, [id^=""pendo-base""], ._pendo-step-container, ' +
-                        '._pendo-backdrop, [class*=""pendo-backdrop""], [pendo-region]'
-                    ).forEach(el => el.remove());
-                }");
-            }
+            try { await Page.EvaluateAsync(@"() => { document.querySelectorAll('#pendo-base,[id^=""pendo-base""],._pendo-step-container,._pendo-backdrop,[class*=""pendo-backdrop""],[pendo-region]').forEach(el => el.remove()); }"); }
             catch { }
             await Task.Delay(150);
         }
 
-        private Task Stabilize(int ms) => Task.Delay(ms);
+        private static bool IsSignInPage(string url)
+            => url.Contains("identity.autodesk") || url.Contains("login.autodesk")
+            || url.Contains("signin.autodesk") || url.Contains("accounts.autodesk");
+
+        private void Log(string name, string msg)
+        {
+            Console.WriteLine($"[bim360] [{name}] {msg}");
+            AutodeskAutomation.Services.SseService.Instance.Broadcast("log", new
+            {
+                level = "INFO",
+                timestamp = DateTime.UtcNow.ToString("O"),
+                message = $"[{name}] {msg}",
+                platform = "bim360"
+            });
+        }
     }
 }
-

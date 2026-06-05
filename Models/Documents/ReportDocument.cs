@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace AutodeskAutomation.Models.Documents
 {
@@ -8,7 +8,7 @@ namespace AutodeskAutomation.Models.Documents
     {
         public string Id { get; set; } = null!;          // reports/{reportId}
         public string ReportId { get; set; } = null!;    // Autodesk report UUID
-        public string RunId { get; set; } = null!;       // → ReportRunDocument.Id
+        public string RunId { get; set; } = null!;       // -> ReportRunDocument.Id
         public string? UserEmail { get; set; }
         public string? Platform { get; set; }
         public string? ProjectId { get; set; }
@@ -30,7 +30,7 @@ namespace AutodeskAutomation.Models.Documents
         public DateTime? CompletedAt { get; set; }
     }
 
-    // One per project-level export — holds the pre-existing snapshot
+    // One per project-level export -- holds the pre-existing snapshot
     public class ReportRunDocument
     {
         public string Id { get; set; } = null!;          // reportruns/{runId}

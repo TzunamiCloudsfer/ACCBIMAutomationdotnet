@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -35,13 +35,13 @@ namespace AutodeskAutomation.Services
                     catch { return MembersExportResult.Fail("Token refresh failed"); }
                 }
                 else
-                    return MembersExportResult.Fail("No valid token — please log in first");
+                    return MembersExportResult.Fail("No valid token -- please log in first");
             }
 
             var bearer = token.AccessToken;
             var members = new List<MemberInfo>();
 
-            // ── Fetch all project users via ACC Admin API ─────────────────────────
+            //  Fetch all project users via ACC Admin API ─────────────────────────
             // Endpoint: GET /construction/admin/v1/projects/{projectId}/users
             // Returns: id, email, name, role, status, accessLevel, etc.
             int offset = 0;
@@ -92,7 +92,7 @@ namespace AutodeskAutomation.Services
             if (members.Count == 0)
                 return MembersExportResult.Fail("No members returned from API");
 
-            // ── Save to RavenDB ───────────────────────────────────────────────────
+            //  Save to RavenDB ───────────────────────────────────────────────────
             var doc = new ProjectMemberDocument
             {
                 Id          = $"projectmembers/{Helpers.SlugHelper.EmailToSlug(userEmail ?? "app")}/{projectId}",
@@ -112,7 +112,7 @@ namespace AutodeskAutomation.Services
             SseService.Instance.Broadcast("log", new
             {
                 level = "INFO",
-                message = $"Saved {members.Count} members — emails: {string.Join(", ", GetSampleEmails(members))}",
+                message = $"Saved {members.Count} members -- emails: {string.Join(", ", GetSampleEmails(members))}",
                 platform = "acc"
             });
 
@@ -125,7 +125,7 @@ namespace AutodeskAutomation.Services
             };
         }
 
-        // ── Fallback: HQ v1 API (older BIM360/ACC accounts) ──────────────────────
+        //  Fallback: HQ v1 API (older BIM360/ACC accounts) ──────────────────────
         private async Task<MembersExportResult> ExportMembersLegacyAsync(
             string projectId, string accountId, string bearer)
         {
@@ -184,7 +184,7 @@ namespace AutodeskAutomation.Services
         private static Raven.Client.Documents.Session.IDocumentSession GetSession(DatabaseService db)
         {
             // Access the RavenDB store via reflection (since it's private in DatabaseService)
-            // — or use a public method we'll add next
+            // -- or use a public method we'll add next
             return db.OpenSession();
         }
 
@@ -196,7 +196,7 @@ namespace AutodeskAutomation.Services
                 if (!string.IsNullOrEmpty(m.Email)) emails.Add(m.Email);
                 if (emails.Count >= 3) break;
             }
-            if (members.Count > 3) emails.Add($"…+{members.Count - 3} more");
+            if (members.Count > 3) emails.Add($"...+{members.Count - 3} more");
             return emails;
         }
     }

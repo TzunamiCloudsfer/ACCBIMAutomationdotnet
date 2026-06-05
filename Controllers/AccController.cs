@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -18,7 +18,7 @@ namespace AutodeskAutomation.Controllers
         private readonly ServerState _srv = ServerState.Instance;
         private readonly SseService _sse = SseService.Instance;
 
-        // ── Projects ──────────────────────────────────────────────────────────────
+        //  Projects ──────────────────────────────────────────────────────────────
         [HttpGet, Route("projects")]
         public IHttpActionResult GetProjects()
         {
@@ -82,7 +82,7 @@ namespace AutodeskAutomation.Controllers
             return response;
         }
 
-        // ── Checkpoint ────────────────────────────────────────────────────────────
+        //  Checkpoint ────────────────────────────────────────────────────────────
         [HttpDelete, Route("checkpoint")]
         public IHttpActionResult ResetCheckpoint()
         {
@@ -100,7 +100,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "ok", reset = body.ProjectIds.Count });
         }
 
-        // ── Export ────────────────────────────────────────────────────────────────
+        //  Export ────────────────────────────────────────────────────────────────
         [HttpPost, Route("export/start")]
         public async Task<HttpResponseMessage> StartExport([FromBody] ExportRequest body)
         {
@@ -166,7 +166,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "resumed" });
         }
 
-        // ── Reports ───────────────────────────────────────────────────────────────
+        //  Reports ───────────────────────────────────────────────────────────────
         [HttpGet, Route("reports")]
         public IHttpActionResult GetReports()
         {
@@ -193,7 +193,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "deleted" });
         }
 
-        // ── Members export ────────────────────────────────────────────────────────
+        //  Members export ────────────────────────────────────────────────────────
         // Fetches project member list (emails, roles) from ACC Admin API and saves it.
         // Equivalent to the Export button on:
         //   https://acc.autodesk.com/project-admin/members/projects/{projectId}
@@ -207,7 +207,7 @@ namespace AutodeskAutomation.Controllers
                 ?? "";
 
             _sse.Broadcast("log", new { level = "INFO",
-                message = $"Fetching members for project {projectId}…", platform = "acc" });
+                message = $"Fetching members for project {projectId}...", platform = "acc" });
 
             var result = await new Services.AccMembersExporter()
                 .ExportMembersAsync(projectId, accountId, _srv.ActiveUser);
@@ -229,9 +229,9 @@ namespace AutodeskAutomation.Controllers
             });
         }
 
-        // GET members is omitted — use POST .../members/export which returns the data directly
+        // GET members is omitted -- use POST .../members/export which returns the data directly
 
-        // ── Admin URL ─────────────────────────────────────────────────────────────
+        //  Admin URL ─────────────────────────────────────────────────────────────
         [HttpPost, Route("admin-url")]
         public IHttpActionResult SetAdminUrl([FromBody] AdminUrlRequest body)
         {
@@ -240,7 +240,7 @@ namespace AutodeskAutomation.Controllers
             return Ok(new { status = "ok" });
         }
 
-        // ── Helpers ───────────────────────────────────────────────────────────────
+        //  Helpers ───────────────────────────────────────────────────────────────
         private string GetSharedAuthPath()
         {
             if (_srv.ActiveUserSlug == null) return string.Empty;
