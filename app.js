@@ -2128,8 +2128,11 @@ function npRenderResults(){
   });
   if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
   tbody.innerHTML=list.map(function(p){
-    var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
-    return '<tr><td style="color:#3b7de9;font-weight:500">'+e2(p.name)+'</td><td>'+badge+'</td><td>—</td><td>—</td></tr>';
+    var isB=p.platform==='bim360';
+    var badge=isB
+      ?'<span class="np-badge-bim360"><svg viewBox="0 0 20 20" fill="currentColor" width="11"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/></svg>BIM 360</span>'
+      :'<span class="np-badge-acc"><svg viewBox="0 0 20 20" fill="currentColor" width="11"><path d="M5.5 16S4 16 4 14.5s1.5-6 7.5-6 7.5 4.5 7.5 6S18 16 16.5 16h-11zm6-10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>ACC</span>';
+    return '<tr><td style="color:#3b7de9;font-weight:600">'+e2(p.name)+'</td><td>'+badge+'</td><td style="color:#475467">'+e2(p.fileCount||'—')+'</td><td style="color:#475467">'+e2(p.fileSize||'—')+'</td></tr>';
   }).join('');
 }
 function npReset(){

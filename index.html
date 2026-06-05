@@ -1005,19 +1005,18 @@
                     <h1 class="np-title" style="margin-bottom: 8px;">Summary Report</h1>
                     <p class="np-sub" style="margin-bottom: 0;">Review synchronized data across your projects.</p>
                 </div>
-                <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:4px">Total: <strong id="np-res-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here for pricing recommendation.</a></div><button class="np-btn-primary" style="padding:10px 20px">View Pricing Plans</button></div>
+                <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:6px">Total synchronized data: <strong id="np-res-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here to get the recommendation pricing based on your usage.</a></div><button class="np-btn-primary" style="padding:10px 20px;flex-shrink:0">View Pricing Plans</button></div>
                 <div class="np-res-toolbar">
-                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
-                    <select id="np-res-filter" onchange="npRenderResults()" style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font:14px Inter,sans-serif;background:#fff;color:#1e293b;outline:none"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="14" style="color:#94a3b8;flex-shrink:0"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
+                    <div class="np-res-filter-wrap"><label>Filter by:</label><select id="np-res-filter" class="np-res-filter" onchange="npRenderResults()"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select></div>
                 </div>
                 <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
-                <div class="np-footer" style="justify-content:center"><button class="np-btn-ghost" onclick="npReset()">Start New Export</button></div>
             </div>
         </div>
     </div>
     <!-- ════════════════════════════════════════════════════════ -->
 
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=9"></script>
 </body>
 </html>
 
