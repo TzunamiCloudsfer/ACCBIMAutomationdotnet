@@ -7176,7 +7176,7 @@ body[data-platform="bim360"] .nav-item.active {
 }
 /* === NEW PAGE — 5-step wizard (np- prefix) === */
 #page-newpage {
-    background: #f0f4f8;
+    background: #eef2f8;
 }
 
 .np-root {
@@ -7675,11 +7675,15 @@ body[data-platform="bim360"] .nav-item.active {
 
 .np-exp-card {
     background: #fff;
-    border: 1.5px solid #e2e8f0;
+    border: 1.5px solid #c8d8e8;
     border-radius: 12px;
     padding: 20px 22px;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 18px rgba(0,56,150,.10);
 }
+
+    .np-exp-card.np-exp-accent {
+        border-left: 4px solid #1a3d7c;
+    }
 
 .np-exp-top {
     display: flex;
@@ -7744,10 +7748,11 @@ body[data-platform="bim360"] .nav-item.active {
 .np-overall {
     width: 100%;
     background: #fff;
+    border: 1.5px solid #c8d8e8;
     border-radius: 12px;
     padding: 16px 20px;
     margin-bottom: 24px;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    box-shadow: 0 4px 18px rgba(0,56,150,.10);
 }
 
 .np-overall-top {
@@ -7826,6 +7831,14 @@ body[data-platform="bim360"] .nav-item.active {
         cursor: not-allowed;
     }
 
+#np-btn-finalize {
+    width: 100%;
+    justify-content: center;
+    border-radius: 12px;
+    padding: 16px 28px;
+    font-size: 16px;
+}
+
 .np-btn-ghost {
     background: none;
     border: 1.5px solid #e2e8f0;
@@ -7874,7 +7887,7 @@ body.wizard-fullscreen {
         inset: 0;
         z-index: 200;
         overflow-y: auto;
-        background: #f8f9fb;
+        background: #eef2f8;
         display: flex !important;
         flex-direction: column;
     }
