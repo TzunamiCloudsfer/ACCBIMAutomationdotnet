@@ -51,11 +51,15 @@ function navigate(page) {
   A.page = page;
   try { sessionStorage.setItem('ui_page', page); } catch { /* private/incognito */ }
 
+  // Hide sidebar on full-screen pages (welcome landing + wizard)
+  document.body.classList.toggle('wizard-fullscreen', page === 'newpage' || page === 'welcome');
+
   if (page === 'auth')      { refreshAuthUI(); checkExistingSession(); }
   if (page === 'platforms') refreshPlatformStats();
   if (page === 'projects')  loadProjects();
   if (page === 'export')    syncExportPage();
   if (page === 'logs')      loadLogs();
+  if (page === 'newpage')   { if (typeof npGoStep === 'function') { npGoStep(NP.step); if (A.sessionValid && NP.step === 1) npShowSuccess(A.activeUser); } }
 }
 
 function selectPlatform(platform) {
@@ -288,9 +292,13 @@ function handleEvent(type, data) {
       if (data.status === 'waiting')      onLoginWaiting(data.elapsed);
       if (data.status === 'completed') {
         if (data.user) { A.activeUser = data.user; updateUserDisplay(); }
-        // Both cookie/2-legged and browser login paths must call finalizeLogin()
-        // to set A.sessionValid = true and enable the "Choose Platform" button.
-        if (data.source === 'cookie' || data.source === '2-legged') {
+        A.sessionValid = true;
+        // When on the new wizard page, advance to Step 2 immediately
+        if (A.page === 'newpage') {
+          if (typeof npClearTimer === 'function') npClearTimer();
+          if (typeof npShowSuccess === 'function') npShowSuccess(data.user);
+          setTimeout(function() { if (typeof npGoStep === 'function') npGoStep(2); }, 1200);
+        } else if (data.source === 'cookie' || data.source === '2-legged') {
           finalizeLogin();
         } else {
           onLoginDetected(data.elapsed);
@@ -543,8 +551,14 @@ function handleEvent(type, data) {
       updateUserDisplay();
       refreshPlatformStats();
       // Send the user back to platforms so they start fresh
-      if (A.page !== 'welcome' && A.page !== 'auth') navigate('platforms');
-      showToast(`Switched to ${A.activeUser || 'default account'} — refreshed.`, 'info');
+      // Exception: if on 'newpage' wizard, advance to Step 2 instead of redirecting
+      if (A.page === 'newpage') {
+        if (typeof npShowSuccess === 'function') npShowSuccess(A.activeUser);
+        setTimeout(function() { if (typeof npGoStep === 'function') npGoStep(2); }, 1000);
+      } else if (A.page !== 'welcome' && A.page !== 'auth') {
+        navigate('platforms');
+      }
+      showToast(`Signed in as ${A.activeUser || 'account'} — ready to export.`, 'success');
       break;
     }
   }
@@ -1886,3 +1900,240 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check Cloudsfer app auth — starts SSE only if authenticated
   checkAuth();
 });
+
+/* ===================================================================
+   NEW PAGE — 5-step wizard  (np_ namespace)
+   =================================================================== */
+const NP = {
+  step:1, platform:'both',
+  projects:[], selectedIds:new Set(), filterTab:'all',
+  loginStart:null, loginTimer:null,
+  export:{running:false,completed:0,total:0,noDm:0,success:0},
+};
+
+function npGoStep(n){
+  NP.step=n;
+  for(let i=1;i<=5;i++){
+    const pg=document.getElementById('np-page-'+i);
+    if(pg){pg.classList.toggle('np-page-active',i===n);pg.classList.toggle('hidden',i!==n);}
+    const sw=document.getElementById('np-s'+i);
+    if(sw){sw.classList.remove('np-active','np-done');if(i===n)sw.classList.add('np-active');if(i<n)sw.classList.add('np-done');}
+    const ln=document.getElementById('np-l'+i);
+    if(ln)ln.classList.toggle('np-done',i<n);
+  }
+  if(n===3)npLoadProjects();
+  if(n===4)npOnEnterExport();
+  if(n===5)npOnEnterResults();
+}
+
+function npShowIdle(){
+  document.getElementById('np-auth-idle').classList.remove('hidden');
+  document.getElementById('np-auth-waiting').classList.add('hidden');
+  document.getElementById('np-auth-success').classList.add('hidden');
+}
+function npShowWaiting(){
+  document.getElementById('np-auth-idle').classList.add('hidden');
+  document.getElementById('np-auth-waiting').classList.remove('hidden');
+  document.getElementById('np-auth-success').classList.add('hidden');
+}
+function npShowSuccess(user){
+  document.getElementById('np-auth-idle').classList.add('hidden');
+  document.getElementById('np-auth-waiting').classList.add('hidden');
+  const box=document.getElementById('np-auth-success');
+  box.classList.remove('hidden');
+  const u=user?'Signed in as <strong>'+String(user).replace(/</g,'&lt;')+'</strong>':'Successfully connected to Autodesk';
+  box.innerHTML=
+    '<div style="width:56px;height:56px;border-radius:50%;background:#dcfce7;border:3px solid #86efac;display:flex;align-items:center;justify-content:center;margin-bottom:16px">'
+    +'<svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color:#166534"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>'
+    +'<h2 class="np-auth-h2">Authentication Complete</h2>'
+    +'<p class="np-auth-p">'+u+'</p>'
+    +'<div style="display:flex;gap:10px;margin-top:8px;width:100%">'
+    +'  <button class="np-btn-primary" onclick="npGoStep(2)" style="flex:1">Choose Platform →</button>'
+    +'  <button class="np-btn-primary" onclick="npShowIdle()" style="flex:0 0 auto">'
+    +'    <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>'
+    +'    Re-authenticate'
+    +'  </button>'
+    +'</div>';
+}
+
+async function npStartLogin(){
+  NP.loginStart=Date.now();npShowWaiting();npStartTimer();
+  try{await fetch('/api/login/start',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});}
+  catch(e){npClearTimer();npShowIdle();if(typeof showToast!=='undefined')showToast('Could not start login: '+e.message,'error');}
+}
+function npCancelLogin(){npClearTimer();npShowIdle();fetch('/api/login/cancel',{method:'POST'}).catch(function(){});}
+function npStartTimer(){
+  npClearTimer();
+  NP.loginTimer=setInterval(function(){
+    var el=document.getElementById('np-timer');if(!el||!NP.loginStart)return;
+    var s=Math.floor((Date.now()-NP.loginStart)/1000);
+    el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  },1000);
+}
+function npClearTimer(){if(NP.loginTimer){clearInterval(NP.loginTimer);NP.loginTimer=null;}}
+
+// Hook into existing SSE
+setTimeout(function(){
+  if(!window.sse)return;
+  var orig=window.sse.onmessage;
+  window.sse.onmessage=function(e){
+    if(orig)orig.call(this,e);
+    if(typeof A==='undefined'||A.page!=='newpage')return;
+    try{
+      var ev=JSON.parse(e.data),type=ev.type,data=ev.data||{};
+      if(type==='login-status'){
+        if(data.status==='browser-open'||data.status==='waiting')npShowWaiting();
+        if(data.status==='completed'){npClearTimer();npShowSuccess(data.user);setTimeout(function(){npGoStep(2);},1200);}
+        if(data.status==='failed'){npClearTimer();npShowIdle();}
+        if(data.status==='cancelled'){npClearTimer();npShowIdle();}
+      }
+      if(type==='discover-complete'&&NP.step===3)npLoadProjects();
+      if(type==='progress-update'&&NP.step===4){
+        var r=data.results||{};
+        NP.export.completed=data.completed||0;NP.export.total=data.total||NP.export.total;
+        NP.export.success=r.Success||r.success||0;NP.export.noDm=r.NoDm||r.no_dm||0;
+        npUpdateExport();
+      }
+      if((type==='export-complete'||type==='export-all-complete')&&NP.step===4){
+        NP.export.running=false;npUpdateExport();
+        var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=false;
+        npSetOverall(100,'COMPLETE');
+      }
+    }catch(err){}
+  };
+},1000);
+
+function npPickPlat(p){
+  NP.platform=p;
+  document.querySelectorAll('.np-plat-opt').forEach(function(el){
+    var sel=el.dataset.plat===p;el.classList.toggle('np-plat-sel',sel);
+    var chk=document.getElementById('np-chk-'+el.dataset.plat);if(chk)chk.classList.toggle('hidden',!sel);
+  });
+}
+
+async function npLoadProjects(){
+  try{
+    var results=await Promise.all([
+      fetch('/api/acc/projects').then(function(r){return r.json();}).catch(function(){return{projects:[],adminUrl:'',adminUrlConfigured:false};}),
+      fetch('/api/bim360/projects').then(function(r){return r.json();}).catch(function(){return{projects:[],adminUrl:'',adminUrlConfigured:false};})
+    ]);
+    var accData=results[0],bimData=results[1];
+    var banner=document.getElementById('np-admin-banner'),inp=document.getElementById('np-url-input');
+    if(banner)banner.classList.toggle('hidden',!!(accData.adminUrlConfigured||bimData.adminUrlConfigured));
+    if(inp&&!inp.value)inp.value=accData.adminUrl||bimData.adminUrl||'';
+    var seen=new Set();NP.projects=[];
+    (accData.projects||[]).forEach(function(p){var q=Object.assign({},p,{platform:p.rawPlatform==='bim360'?'bim360':'acc'});if(!seen.has(q.id)){seen.add(q.id);NP.projects.push(q);}});
+    (bimData.projects||[]).forEach(function(p){var q=Object.assign({},p,{platform:'bim360'});if(!seen.has(q.id)){seen.add(q.id);NP.projects.push(q);}});
+    npRenderTable();
+  }catch(e){if(typeof showToast!=='undefined')showToast('Failed to load: '+e.message,'error');}
+}
+async function npSaveAndDiscover(){
+  var inp=document.getElementById('np-url-input');
+  var url=(inp?inp.value:'').trim();
+  if(!url){if(typeof showToast!=='undefined')showToast('Please enter a URL.','warning');return;}
+  var isAcc=url.indexOf('acc.autodesk.com')>=0,isBim=url.indexOf('b360.autodesk.com')>=0;
+  var plat=isAcc?'acc':isBim?'bim360':'acc';
+  try{
+    await fetch('/api/'+plat+'/admin-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
+    if(typeof showToast!=='undefined')showToast('URL saved — discovering...','success');
+    if(NP.platform!=='bim360')fetch('/api/acc/projects/discover',{method:'POST'}).catch(function(){});
+    if(NP.platform!=='acc')fetch('/api/bim360/projects/discover',{method:'POST'}).catch(function(){});
+  }catch(e){if(typeof showToast!=='undefined')showToast('Error: '+e.message,'error');}
+}
+function npSetTab(btn,tab){
+  NP.filterTab=tab;
+  document.querySelectorAll('.np-ftab').forEach(function(b){b.classList.toggle('np-ftab-active',b.dataset.tab===tab);});
+  npRenderTable();
+}
+function npRenderTable(){
+  var tbody=document.getElementById('np-tbody'),empty=document.getElementById('np-empty');
+  var search=(document.getElementById('np-proj-search')?document.getElementById('np-proj-search').value:'').toLowerCase();
+  var list=NP.projects.filter(function(p){
+    if(NP.filterTab==='bim360'&&p.platform!=='bim360')return false;
+    if(NP.filterTab==='acc'&&p.platform!=='acc')return false;
+    if(search&&p.name.toLowerCase().indexOf(search)<0)return false;
+    return true;
+  });
+  if(!list.length){if(tbody)tbody.innerHTML='';if(empty)empty.classList.remove('hidden');npUpdateSel();return;}
+  if(empty)empty.classList.add('hidden');
+  var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  if(tbody)tbody.innerHTML=list.map(function(p){
+    var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
+    var last=p.status==='completed'?'Previously exported':'Never';
+    return '<tr><td style="text-align:center"><input type="checkbox" '+(NP.selectedIds.has(p.id)?'checked':'')+' data-id="'+e2(p.id)+'" onchange="npCheck(this)"></td><td>'+e2(p.name)+'</td><td>'+badge+'</td><td style="font-size:13px;color:#64748b">'+last+'</td></tr>';
+  }).join('');
+  npUpdateSel();
+}
+function npCheck(cb){if(cb.checked)NP.selectedIds.add(cb.dataset.id);else NP.selectedIds.delete(cb.dataset.id);npUpdateSel();}
+function npToggleAll(checked){
+  NP.projects.filter(function(p){
+    if(NP.filterTab==='bim360'&&p.platform!=='bim360')return false;
+    if(NP.filterTab==='acc'&&p.platform!=='acc')return false;return true;
+  }).forEach(function(p){if(checked)NP.selectedIds.add(p.id);else NP.selectedIds.delete(p.id);});
+  npRenderTable();
+}
+function npUpdateSel(){
+  var n=NP.selectedIds.size,el=document.getElementById('np-sel-count');
+  if(el)el.textContent=n+' project'+(n!==1?'s':'')+' selected';
+  var btn=document.getElementById('np-btn-export');if(btn)btn.disabled=n===0;
+}
+async function npStartExport(){
+  if(!NP.selectedIds.size){if(typeof showToast!=='undefined')showToast('Select at least one project.','warning');return;}
+  npGoStep(4);
+  var ids=Array.from(NP.selectedIds);
+  var accIds=NP.projects.filter(function(p){return p.platform!=='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
+  var bimIds=NP.projects.filter(function(p){return p.platform==='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
+  try{
+    if(accIds.length&&NP.platform!=='bim360')await fetch('/api/acc/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:accIds})});
+    if(bimIds.length&&NP.platform!=='acc')await fetch('/api/bim360/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:bimIds})});
+    NP.export.total=ids.length;npUpdateExport();
+  }catch(e){if(typeof showToast!=='undefined')showToast('Export start failed: '+e.message,'error');}
+}
+function npOnEnterExport(){
+  NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0};
+  var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;npUpdateExport();
+}
+function npUpdateExport(){
+  var c=NP.export,pct=c.total>0?Math.min(100,Math.round(c.completed/c.total*100)):0;
+  var rmax=Math.max(1,c.total-c.noDm),rpct=Math.min(100,Math.round(c.success/rmax*100));
+  var fe=document.getElementById('np-fetched');if(fe)fe.textContent=c.completed+'/'+c.total;
+  var ff=document.getElementById('np-fill-fetch');if(ff)ff.style.width=pct+'%';
+  var bf=document.getElementById('np-badge-fetch');if(bf){bf.className='np-exp-badge '+(c.running?'np-processing':'np-done-badge');bf.textContent=c.running?'PROCESSING':'DONE';}
+  var ne=document.getElementById('np-nodm');if(ne)ne.textContent=String(c.noDm);
+  var re=document.getElementById('np-reports');if(re)re.textContent=c.success+'/'+rmax;
+  var rf=document.getElementById('np-fill-rep');if(rf)rf.style.width=rpct+'%';
+  var br=document.getElementById('np-badge-rep');if(br){br.className='np-exp-badge '+(c.running?'np-finalizing':'np-done-badge');br.textContent=c.running?'FINALIZING':'DONE';}
+  npSetOverall(pct,c.running?(pct>=80?'SYNCING FINAL MANIFEST':'PROCESSING'):'COMPLETE');
+}
+function npSetOverall(pct,label){
+  var of=document.getElementById('np-overall-fill');if(of)of.style.width=pct+'%';
+  var ol=document.getElementById('np-overall-lbl');if(ol)ol.textContent=label;
+  var op=document.getElementById('np-overall-pct');if(op)op.textContent=pct+'%';
+}
+function npOnEnterResults(){
+  var s=NP.export.success,el=document.getElementById('np-res-total');
+  if(el)el.textContent=s+' project'+(s!==1?'s':'')+' exported';
+  npRenderResults();
+}
+function npRenderResults(){
+  var tbody=document.getElementById('np-res-tbody');if(!tbody)return;
+  var search=(document.getElementById('np-res-search')?document.getElementById('np-res-search').value:'').toLowerCase();
+  var filter=document.getElementById('np-res-filter')?document.getElementById('np-res-filter').value:'all';
+  var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var list=NP.projects.filter(function(p){
+    if(!NP.selectedIds.has(p.id))return false;
+    if(filter==='acc'&&p.platform!=='acc')return false;
+    if(filter==='bim360'&&p.platform!=='bim360')return false;
+    if(search&&p.name.toLowerCase().indexOf(search)<0)return false;return true;
+  });
+  if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
+  tbody.innerHTML=list.map(function(p){
+    var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
+    return '<tr><td style="color:#3b7de9;font-weight:500">'+e2(p.name)+'</td><td>'+badge+'</td><td>—</td><td>—</td></tr>';
+  }).join('');
+}
+function npReset(){
+  NP.selectedIds.clear();NP.projects=[];
+  NP.export={running:false,completed:0,total:0,noDm:0,success:0};
+  npGoStep(1);npShowIdle();
+}

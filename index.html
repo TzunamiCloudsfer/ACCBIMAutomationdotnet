@@ -1,868 +1,1026 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloudsfer â€” Autodesk Document Export</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=6">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudsfer â€” Autodesk Document Export</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
+<!--body class="wizard-fullscreen">-->
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CLOUDSFER AUTH OVERLAY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-<div id="auth-overlay" class="auth-overlay">
-  <div class="auth-card">
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CLOUDSFER AUTH OVERLAY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-card">
 
-    <div class="auth-logo-wrap">
-      <img src="cloudsfer-logo.png" alt="Cloudsfer" class="auth-logo-img">
+            <div class="auth-logo-wrap">
+                <img src="cloudsfer-logo.png" alt="Cloudsfer" class="auth-logo-img">
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab-btn active" id="tab-signin" onclick="showAuthTab('signin')">Sign In</button>
+                <button class="auth-tab-btn" id="tab-create" onclick="showAuthTab('create')">Create Account</button>
+            </div>
+
+            <!-- Sign In form -->
+            <form id="form-signin" class="auth-form" onsubmit="handleLogin(event)">
+                <div id="signin-success" class="auth-msg-ok hidden"></div>
+                <div id="signin-error" class="auth-msg-err hidden"></div>
+                <div class="auth-field">
+                    <label class="auth-label" for="signin-email">Email</label>
+                    <input class="auth-input" type="email" id="signin-email" required placeholder="you@company.com" autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="signin-password">Password</label>
+                    <input class="auth-input" type="password" id="signin-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-signin-submit">Sign In</button>
+                <p class="auth-switch-txt">No account yet? <a href="#" onclick="showAuthTab('create');return false">Create one</a></p>
+            </form>
+
+            <!-- Create Account form -->
+            <form id="form-create" class="auth-form hidden" onsubmit="handleSignup(event)">
+                <div class="auth-notice-box">
+                    <svg viewBox="0 0 16 16" fill="currentColor" width="13" style="flex-shrink:0;margin-top:1px"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H7V7h2v4zm0-6H7V3h2v2z" /></svg>
+                    <span>Use the email address associated with your <strong>Autodesk ACC</strong> or <strong>BIM360</strong> account so reports are delivered to the right inbox.</span>
+                </div>
+                <div id="create-error" class="auth-msg-err hidden"></div>
+                <div class="auth-field">
+                    <label class="auth-label" for="create-email">Email <span class="auth-field-hint">(your Autodesk / ACC / BIM360 email)</span></label>
+                    <input class="auth-input" type="email" id="create-email" required placeholder="you@company.com" autocomplete="email">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="create-password">Password <span class="auth-field-hint">(min. 6 characters)</span></label>
+                    <input class="auth-input" type="password" id="create-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" minlength="6" autocomplete="new-password">
+                </div>
+                <div class="auth-field">
+                    <label class="auth-label" for="create-confirm">Confirm Password</label>
+                    <input class="auth-input" type="password" id="create-confirm" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-create-submit">Create Account</button>
+                <p class="auth-switch-txt">Already have an account? <a href="#" onclick="showAuthTab('signin');return false">Sign in</a></p>
+            </form>
+
+            <div class="auth-footer-brand">Powered by Tzunami</div>
+        </div>
     </div>
 
-    <div class="auth-tabs">
-      <button class="auth-tab-btn active" id="tab-signin" onclick="showAuthTab('signin')">Sign In</button>
-      <button class="auth-tab-btn" id="tab-create" onclick="showAuthTab('create')">Create Account</button>
+    <!-- Sidebar overlay â€” shown only on mobile when sidebar is open -->
+    <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <aside id="sidebar" style="display: none;">
+
+        <div class="sb-logo">
+            <img src="cloudsfer-logo.png" alt="Cloudsfer" class="sb-logo-img">
+        </div>
+
+        <!--<nav class="sb-nav" id="sb-nav">-->
+        <nav class="sb-nav" id="sb-nav" style="display: none;">
+
+            <div class="sb-section-label">Navigation</div>
+
+            <a class="nav-item active" data-page="welcome" id="nav-welcome">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                <span>Overview</span>
+            </a>
+
+            <a class="nav-item" data-page="auth" id="nav-auth">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
+                <span>Authentication</span>
+                <span class="nav-badge" id="nav-badge-auth"></span>
+            </a>
+
+            <a class="nav-item" data-page="platforms" id="nav-platforms">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                <span>Platform</span>
+                <span class="nav-badge plat-badge hidden" id="nav-badge-platform"></span>
+            </a>
+
+            <a class="nav-item" data-page="newpage" id="nav-newpage">
+                <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" /></svg>
+                <span>New Export</span>
+            </a>
+
+            <div class="sb-divider" id="sb-plat-divider"></div>
+
+            <div id="sb-plat-nav" class="hidden">
+                <div class="sb-section-label" id="sb-plat-label">Workspace</div>
+
+                <a class="nav-item" data-page="projects" id="nav-projects">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" /></svg>
+                    <span>Projects</span>
+                    <span class="nav-badge" id="nav-badge-projects"></span>
+                </a>
+
+                <a class="nav-item" data-page="export" id="nav-export">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" /></svg>
+                    <span>Export</span>
+                    <span class="nav-badge running-pulse hidden" id="nav-badge-export">â—</span>
+                </a>
+
+                <a class="nav-item" data-page="logs" id="nav-logs">
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" /></svg>
+                    <span>Logs &amp; History</span>
+                </a>
+            </div>
+
+        </nav>
+
+        <div class="sb-footer">
+            <div class="conn-status" id="conn-status">
+                <span class="conn-dot" id="conn-dot"></span>
+                <span id="conn-text">Connectingâ€¦</span>
+            </div>
+            <div id="sidebar-user-wrap" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);display:none">
+                <p style="font-size:10px;color:rgba(255,255,255,0.4);margin:0 0 2px">Signed in as</p>
+                <p id="sidebar-user" style="font-size:11px;color:rgba(255,255,255,0.7);margin:0;word-break:break-all"></p>
+                <button class="auth-logout-btn" id="btn-logout" onclick="logout()">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="12"><path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" /></svg>
+                    Sign Out
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MAIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <main id="main">
+
+        <!-- Mobile topbar â€” hidden on desktop via CSS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div class="mobile-topbar" id="mobile-topbar">
+            <button class="btn-hamburger" id="btn-hamburger" onclick="toggleSidebar()" aria-label="Open menu">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="18">
+                    <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
+                </svg>
+            </button>
+            <div class="mobile-topbar-brand">
+                <img src="cloudsfer-logo.png" alt="Cloudsfer" class="mobile-logo-img">
+            </div>
+            <div class="conn-status" style="margin-left:auto">
+                <span class="conn-dot" id="conn-dot-mobile"></span>
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: WELCOME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-welcome" class="page active">
+            <div class="page-content">
+                <div class="welcome-wrap">
+
+                    <div class="welcome-hero">
+                        <div class="hero-badge">
+                            <svg viewBox="0 0 14 14" fill="currentColor" width="11"><path d="M13.5 6H8V.5a.5.5 0 00-1 0V6H1.5a.5.5 0 000 1H7v5.5a.5.5 0 001 0V7h5.5a.5.5 0 000-1z" /></svg>
+                            Powered by Tzunami
+                        </div>
+                        <h1>Automate Your<br><span>Autodesk Document Exports</span></h1>
+                        <p class="hero-desc">Cloudsfer streamlines document log extraction across your entire Autodesk portfolio. One secure sign-on connects both ACC and BIM360 â€” then Cloudsfer handles the rest, automatically exporting Files Logs and Document Logs at scale.</p>
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                            <button class="btn btn-primary btn-hero" onclick="navigate('newpage')">
+                                Get Started
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" /></svg>
+                            </button>
+                            <span style="font-size:12px;color:var(--txt-3)">No configuration required after first login</span>
+                        </div>
+                    </div>
+
+                    <div class="platform-preview-grid">
+                        <div class="platform-preview-card acc-card">
+                            <div class="pp-header">
+                                <div class="pp-icon acc-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                                </div>
+                                <div>
+                                    <h3>Autodesk Construction Cloud</h3>
+                                    <span class="pp-badge acc-badge">ACC</span>
+                                </div>
+                            </div>
+                            <ul class="pp-features">
+                                <li>Automated Files Log export per project</li>
+                                <li>Sequential batch processing with resume</li>
+                                <li>Smart BIM360 project filtering</li>
+                                <li>Checkpoint recovery on interruption</li>
+                            </ul>
+                        </div>
+                        <div class="platform-preview-card bim-card">
+                            <div class="pp-header">
+                                <div class="pp-icon bim-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="16" y2="17" /></svg>
+                                </div>
+                                <div>
+                                    <h3>Autodesk BIM 360</h3>
+                                    <span class="pp-badge bim-badge">BIM360</span>
+                                </div>
+                            </div>
+                            <ul class="pp-features">
+                                <li>Document Log export â€” Plans &amp; Project Files</li>
+                                <li>Live progress streaming with pause &amp; resume</li>
+                                <li>Detailed per-project error capture &amp; logs</li>
+                                <li>Full run history &amp; report download</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="welcome-stats-row">
+                        <div class="welcome-stat-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--brand-m)"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
+                            <div>
+                                <strong>Single Sign-On</strong>
+                                <span>One Autodesk login covers ACC &amp; BIM360</span>
+                            </div>
+                        </div>
+                        <div class="welcome-stat-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--ok)"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /></svg>
+                            <div>
+                                <strong>Fully Automated</strong>
+                                <span>Set up once, export hundreds of projects</span>
+                            </div>
+                        </div>
+                        <div class="welcome-stat-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--warn)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg>
+                            <div>
+                                <strong>Inbox Delivery</strong>
+                                <span>Reports emailed directly to your Autodesk account</span>
+                            </div>
+                        </div>
+                        <div class="welcome-stat-item">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--bim)"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" /></svg>
+                            <div>
+                                <strong>Resume Anywhere</strong>
+                                <span>Checkpoint system resumes interrupted runs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-auth" class="page">
+            <div class="page-content">
+                <div class="steps-bar">
+                    <div class="step active" id="step-1"><div class="step-dot">1</div><span class="step-label">Authenticate</span></div>
+                    <div class="step-line"></div>
+                    <div class="step" id="step-2"><div class="step-dot">2</div><span class="step-label">Choose Platform</span></div>
+                    <div class="step-line"></div>
+                    <div class="step" id="step-3"><div class="step-dot">3</div><span class="step-label">Operate</span></div>
+                </div>
+
+                <div class="pg-header">
+                    <h2>Connect to Autodesk</h2>
+                    <p>Sign in with your Autodesk account. One login gives you access to both ACC and BIM360 workspaces.</p>
+                </div>
+
+                <div id="session-banner" class="alert hidden"></div>
+
+                <!-- State: idle â€” show login CTA -->
+                <div id="auth-idle" class="card">
+                    <div class="card-footer">
+                        <div class="login-cta-row">
+                            <div class="login-cta-text">
+                                <p class="cta-title">Open Autodesk Login Browser</p>
+                                <p class="cta-desc">A browser window will open for you to sign in securely. Complete any MFA prompts, then wait for the dashboard to load â€” the system will detect your login automatically.</p>
+                            </div>
+                            <button class="btn btn-primary btn-md" id="btn-login">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
+                                Open Login Browser
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State: pending â€” browser open, waiting for login -->
+                <div id="auth-pending" class="card hidden">
+                    <div class="card-body">
+                        <div class="login-wait-layout">
+                            <div class="login-wait-visual">
+                                <div class="pulse-ring"><div class="pulse-core"></div></div>
+                                <div class="wait-timer" id="wait-timer">0:00</div>
+                                <p class="wait-timer-label">Time Elapsed</p>
+                            </div>
+                            <div class="login-wait-info">
+                                <h3>Browser is Open â€” Please Sign In</h3>
+                                <p class="wait-desc">Complete your Autodesk authentication in the browser window. The system will detect your login automatically.</p>
+                                <ol class="login-steps-list">
+                                    <li>Enter your Autodesk email address</li>
+                                    <li>Enter your password</li>
+                                    <li>Complete MFA / 2-Factor verification if prompted</li>
+                                    <li>Wait until the ACC dashboard fully loads</li>
+                                </ol>
+                                <div class="wait-note" id="wait-note">
+                                    <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H7V7h2v4zm0-6H7V3h2v2z" /></svg>
+                                    Please take your time â€” the login window will stay open for up to 10 minutes.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="wait-footer-row">
+                            <div class="wait-status-chip" id="wait-status-chip">
+                                <span class="spinner-sm"></span>
+                                <span id="wait-status-text">Waiting for authenticationâ€¦</span>
+                            </div>
+                            <button class="btn btn-ghost btn-sm" id="btn-cancel-login">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State: success â€” session active -->
+                <div id="auth-success" class="card hidden">
+                    <div class="card-body">
+                        <div class="session-ok-row">
+                            <div class="session-ok-icon">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg>
+                            </div>
+                            <div class="session-ok-text">
+                                <strong>Session Active</strong>
+                                <span id="auth-user-email" class="auth-user-email hidden"></span>
+                                <span id="session-age-text">Session is valid.</span>
+                            </div>
+                            <button class="btn btn-ghost btn-sm" id="btn-relogin">Re-authenticate</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-actions">
+                    <button class="btn btn-ghost" onclick="navigate('welcome')">Back to Overview</button>
+                    <button class="btn btn-primary btn-md" id="btn-to-platforms" disabled>
+                        Choose Platform
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: PLATFORM SELECTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-platforms" class="page">
+            <div class="page-content">
+                <div class="steps-bar">
+                    <div class="step done"><div class="step-dot">âœ“</div><span class="step-label">Authenticate</span></div>
+                    <div class="step-line done"></div>
+                    <div class="step active"><div class="step-dot">2</div><span class="step-label">Choose Platform</span></div>
+                    <div class="step-line"></div>
+                    <div class="step"><div class="step-dot">3</div><span class="step-label">Operate</span></div>
+                </div>
+
+                <div class="pg-header">
+                    <h2>Choose Your Platform</h2>
+                    <p>Select the Autodesk platform you want to work with. You can switch between platforms at any time.</p>
+                </div>
+
+                <div class="platform-cards">
+
+                    <div class="platform-card acc-platform-card" id="platform-card-acc" onclick="selectPlatform('acc')">
+                        <div class="plat-card-top">
+                            <div class="plat-icon-wrap acc-icon-wrap">
+                                <svg viewBox="0 0 32 32" fill="none" width="34" height="34"><path d="M5 26l11-20 11 20" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" /><path d="M8.5 19.5h15" stroke="#fff" stroke-width="2.2" stroke-linecap="round" /></svg>
+                            </div>
+                            <div class="plat-card-brand">
+                                <span class="plat-card-sub">Autodesk</span>
+                                <h3 class="plat-card-name">Construction Cloud</h3>
+                            </div>
+                            <span class="plat-tag acc-tag">ACC</span>
+                        </div>
+                        <p class="plat-card-desc">Export Files Logs across all your ACC projects automatically. Supports sequential processing with checkpoint resume and BIM360 project filtering.</p>
+                        <ul class="plat-features">
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                Files Log automated export
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                Pause &amp; resume mid-run
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                BIM360 projects exported independently
+                            </li>
+                        </ul>
+                        <div class="plat-card-stats" id="acc-plat-stats">
+                            <span class="plat-stat"><span id="acc-stat-total">â€”</span> ACC</span>
+                            <span class="plat-stat-sep">Â·</span>
+                            <span class="plat-stat pending"><span id="acc-stat-pending">â€”</span> pending</span>
+                            <span class="plat-stat-sep">Â·</span>
+                            <span class="plat-stat done"><span id="acc-stat-done">â€”</span> completed</span>
+                            <span class="plat-stat-sep" id="acc-bim360-sep" style="display:none">Â·</span>
+                            <span class="plat-stat" id="acc-bim360-stat" style="display:none"><span id="acc-stat-bim360">0</span> BIM360</span>
+                        </div>
+                        <div class="plat-card-actions" onclick="event.stopPropagation()">
+                            <button class="btn btn-outline btn-sm plat-discover-btn" id="btn-discover-acc" onclick="discoverPlatform('acc')">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg>
+                                Discover
+                            </button>
+                            <button class="btn plat-select-btn acc-select-btn" onclick="selectPlatform('acc')">
+                                Open Workspace
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" /></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="platform-card bim-platform-card" id="platform-card-bim360" onclick="selectPlatform('bim360')">
+                        <div class="plat-card-top">
+                            <div class="plat-icon-wrap bim-icon-wrap">
+                                <svg viewBox="0 0 32 32" fill="none" width="34" height="34"><path d="M8 4h16a2 2 0 012 2v20a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="#fff" stroke-width="2" /><path d="M11 11h10M11 16h10M11 21h6" stroke="#fff" stroke-width="2" stroke-linecap="round" /></svg>
+                            </div>
+                            <div class="plat-card-brand">
+                                <span class="plat-card-sub">Autodesk</span>
+                                <h3 class="plat-card-name">BIM 360</h3>
+                            </div>
+                            <span class="plat-tag bim-tag">BIM360</span>
+                        </div>
+                        <p class="plat-card-desc">Export Document Logs for both Plans and Project Files across all BIM360 projects. Features live progress streaming, pause/resume, and detailed error capture.</p>
+                        <ul class="plat-features">
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                Plans &amp; Project Files logs
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                Live log terminal streaming
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z" /></svg>
+                                Error screenshots &amp; logs
+                            </li>
+                        </ul>
+                        <div class="plat-card-stats">
+                            <span class="plat-stat"><span id="bim360-stat-total">â€”</span> projects</span>
+                            <span class="plat-stat-sep">Â·</span>
+                            <span class="plat-stat pending"><span id="bim360-stat-pending">â€”</span> pending</span>
+                            <span class="plat-stat-sep">Â·</span>
+                            <span class="plat-stat done"><span id="bim360-stat-done">â€”</span> completed</span>
+                        </div>
+                        <div class="plat-card-actions" onclick="event.stopPropagation()">
+                            <button class="btn btn-outline btn-sm plat-discover-btn" id="btn-discover-bim360" onclick="discoverPlatform('bim360')">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg>
+                                Discover
+                            </button>
+                            <button class="btn plat-select-btn bim-select-btn" onclick="selectPlatform('bim360')">
+                                Open Workspace
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" /></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Discover & Export All Platforms -->
+                <div class="export-all-row" id="export-all-row">
+                    <div class="export-all-inner">
+                        <div class="export-all-info">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="20" style="color:var(--brand-m);flex-shrink:0"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" /></svg>
+                            <div>
+                                <strong>Discover &amp; Export All Platforms</strong>
+                                <p>Fetches the latest project list from ACC and BIM360, then exports everything pending â€” automatically, in one click.</p>
+                            </div>
+                        </div>
+                        <div class="export-all-actions">
+                            <button class="btn btn-primary btn-md" id="btn-discover-export-all" onclick="discoverAllAndExport()">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" /></svg>
+                                Discover &amp; Export All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-actions">
+                    <button class="btn btn-ghost" onclick="navigate('auth')">Back to Authentication</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: PROJECTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-projects" class="page">
+            <div class="page-content">
+                <div class="pg-header pg-header-row">
+                    <div>
+                        <h2 id="projects-title">Projects</h2>
+                        <p id="projects-desc">Select projects to include in the next export run.</p>
+                    </div>
+                    <div class="pg-header-actions">
+                        <button class="btn btn-outline btn-sm" id="btn-discover">
+                            <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg>
+                            Discover Projects
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-num" id="stat-total">â€”</span>
+                        <span class="stat-lbl">Total</span>
+                    </div>
+                    <div class="stat-card stat-warn">
+                        <span class="stat-num" id="stat-pending">â€”</span>
+                        <span class="stat-lbl">Pending</span>
+                    </div>
+                    <div class="stat-card stat-ok">
+                        <span class="stat-num" id="stat-completed">â€”</span>
+                        <span class="stat-lbl">Completed</span>
+                    </div>
+                    <div class="stat-card stat-muted">
+                        <span class="stat-num" id="stat-nodm">â€”</span>
+                        <span class="stat-lbl">No Data Mgmt</span>
+                    </div>
+                </div>
+
+                <!-- Admin URL setup â€” shown when accountAdminUrl is not configured -->
+                <div id="admin-url-setup-card" class="card hidden" style="margin-bottom:16px">
+                    <div class="card-body">
+                        <p style="font-weight:600;margin-bottom:4px">Account Admin URL not configured</p>
+                        <p style="font-size:13px;color:var(--txt-3);margin-bottom:12px">
+                            Enter your Autodesk account admin URL to enable project discovery.
+                            <br>ACC format: <code style="font-size:11px">https://acc.autodesk.com/account-admin/projects/accounts/&lt;uuid&gt;/active</code>
+                            <br>BIM360 format: <code style="font-size:11px">https://admin.b360.autodesk.com/admin/&lt;uuid&gt;/projects</code>
+                        </p>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input class="form-input" id="admin-url-input" type="url" placeholder="Paste your account admin URL here" style="flex:1">
+                            <button class="btn btn-primary btn-sm" onclick="saveAdminUrl()">Save &amp; Discover</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="table-toolbar">
+                        <div class="toolbar-left">
+                            <button class="btn btn-ghost btn-sm" id="btn-select-all">Select All</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-select-pending">Pending Only</button>
+                            <button class="btn btn-ghost btn-sm" id="btn-deselect-all">Deselect All</button>
+                            <button class="btn btn-ghost btn-sm btn-danger" id="btn-reset-cp">Reset Progress</button>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll" id="projects-table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-chk"><input type="checkbox" id="check-all"></th>
+                                    <th>Project Name</th>
+                                    <th id="th-platform">Platform</th>
+                                    <th>Status</th>
+                                    <th class="col-id">Project ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="projects-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="no-projects-state" class="empty-state hidden">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>
+                        <p>No projects found</p>
+                        <p class="empty-sub">Click <strong>Discover Projects</strong> to fetch your project list from the Autodesk API.</p>
+                    </div>
+                </div>
+
+                <div class="page-actions">
+                    <button class="btn btn-ghost" onclick="navigate('platforms')">â† Change Platform</button>
+                    <div class="actions-right">
+                        <label class="check-label">
+                            <input type="checkbox" id="export-fresh">
+                            <span>Reset checkpoint before export</span>
+                        </label>
+                        <button class="btn btn-primary btn-md" id="btn-start-export" disabled>
+                            Start Export
+                            <span class="sel-count-badge" id="selected-count">0</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: EXPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-export" class="page">
+            <div class="page-content page-export-content">
+
+                <div class="export-topbar">
+                    <div class="export-title-group">
+                        <h2 id="export-title">Export in Progress</h2>
+                        <p id="export-subtitle" class="text-muted">Processing projects one by oneâ€¦</p>
+                    </div>
+                    <div class="export-topbar-right">
+                        <div id="export-run-controls" class="hidden">
+                            <button class="btn btn-warn btn-sm" id="btn-pause">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" /></svg>
+                                Pause
+                            </button>
+                            <button class="btn btn-success btn-sm hidden" id="btn-resume">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" /></svg>
+                                Resume
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-card">
+                    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-meta">
+                        <span id="progress-text">0 of 0 projects</span>
+                        <span class="progress-pct" id="progress-pct">0%</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid" id="export-stats-grid">
+                    <div class="stat-card stat-done">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5" /></svg>
+                        </div>
+                        <div class="stat-body">
+                            <span class="stat-export-label">Done</span>
+                            <span class="stat-export-value" id="chip-success">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-fail">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                        </div>
+                        <div class="stat-body">
+                            <span class="stat-export-label">Failed</span>
+                            <span class="stat-export-value" id="chip-failed">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-nodm">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" stroke-linecap="round" /></svg>
+                        </div>
+                        <div class="stat-body">
+                            <span class="stat-export-label">No DM</span>
+                            <span class="stat-export-value" id="chip-nodm">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-skip">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v14M5 12l11-7v14z" /></svg>
+                        </div>
+                        <div class="stat-body">
+                            <span class="stat-export-label">Skipped</span>
+                            <span class="stat-export-value" id="chip-skipped">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pause-banner" class="alert alert-warn hidden">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="15"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" /></svg>
+                    Export is paused. Click <strong>Resume</strong> to continue with the next project.
+                </div>
+
+                <div class="export-body log-hidden" id="export-body">
+
+                    <div class="export-panel" id="panel-projects">
+                        <div class="panel-header">
+                            <span>Projects</span>
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span class="panel-count" id="proj-panel-count"></span>
+                                <button class="btn btn-ghost btn-xs" id="btn-show-log" onclick="toggleLogPanel()">
+                                    <svg viewBox="0 0 20 20" fill="currentColor" width="11"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" /></svg>
+                                    Show Logs
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-scroll export-progress-scroll">
+                            <table class="data-table export-progress-table">
+                                <thead>
+                                    <tr>
+                                        <th>Project Name</th>
+                                        <th class="psi-th-status">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="export-project-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="export-panel log-panel" id="panel-log">
+                        <div class="panel-header">
+                            <span>Live Log</span>
+                            <div class="log-controls">
+                                <label class="toggle-sm">
+                                    <input type="checkbox" id="log-autoscroll" checked>
+                                    <span>Auto-scroll</span>
+                                </label>
+                                <button class="btn btn-ghost btn-xs" id="btn-clear-log">Clear</button>
+                                <button class="btn btn-ghost btn-xs" id="btn-toggle-log" onclick="toggleLogPanel()">Hide</button>
+                            </div>
+                        </div>
+                        <div class="terminal" id="log-terminal"></div>
+                    </div>
+
+                </div>
+
+                <div id="export-complete-card" class="complete-card hidden">
+                    <div class="complete-icon-wrap" id="complete-icon"></div>
+                    <div class="complete-text">
+                        <h3 id="complete-title">Export Complete</h3>
+                        <p id="complete-sub" class="text-muted"></p>
+                    </div>
+                    <div class="complete-stats">
+                        <div class="cstat"><span id="cs-success">0</span><label>Successful</label></div>
+                        <div class="cstat cstat-err"><span id="cs-failed">0</span><label>Failed</label></div>
+                        <div class="cstat cstat-acc"><span id="cs-emails">0</span><label>Emails Queued</label></div>
+                        <div class="cstat cstat-muted"><span id="cs-skipped">0</span><label>Skipped</label></div>
+                    </div>
+                    <div class="complete-actions">
+                        <button class="btn btn-ghost" onclick="navigate('projects')">â† Back to Projects</button>
+                        <button class="btn btn-outline" onclick="navigate('logs')">View Run Logs</button>
+                        <button class="btn btn-primary" onclick="startNewRun()">Start New Run</button>
+                    </div>
+                </div>
+
+                <!-- Projects without Document Management â€” shown after export completes -->
+                <div id="nodm-retry-section" class="hidden">
+                    <div class="panel-header" style="margin-top:20px;padding:0 0 10px">
+                        <span style="font-size:14px;font-weight:700;color:var(--txt)">Projects Without Document Management</span>
+                        <span class="panel-count" id="nodm-count"></span>
+                    </div>
+                    <p style="font-size:13px;color:var(--txt-3);margin:0 0 12px">These projects were skipped because Document Management was unavailable. Select and retry if you think this was a navigation error.</p>
+                    <div class="card">
+                        <div class="table-scroll">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-chk"><input type="checkbox" id="nodm-check-all" onchange="toggleAllNoDm(this.checked)"></th>
+                                        <th>Project Name</th>
+                                        <th class="col-id">Project ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nodm-retry-tbody"></tbody>
+                            </table>
+                        </div>
+                        <div style="padding:12px 16px;border-top:1px solid var(--brd);display:flex;justify-content:flex-end">
+                            <button class="btn btn-outline btn-sm" id="btn-retry-nodm" onclick="retrySelectedNoDm()">
+                                <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" /></svg>
+                                Retry Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: LOGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+        <div id="page-logs" class="page">
+            <div class="page-content">
+                <div class="pg-header pg-header-row">
+                    <div>
+                        <h2 id="logs-title">Logs &amp; History</h2>
+                        <p>Detailed results from every export run and captured error events.</p>
+                    </div>
+                    <button class="btn btn-outline btn-sm" id="btn-refresh-logs">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" /></svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="run-history">Run History</button>
+                    <button class="tab-btn" data-tab="error-logs" id="tab-btn-errors">Error Logs <span class="tab-cnt" id="error-count"></span></button>
+                </div>
+
+                <div id="tab-run-history" class="tab-panel active">
+                    <div class="card card-table">
+                        <div class="bulk-bar hidden" id="reports-bulk-bar">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                                <input type="checkbox" id="reports-select-all" onchange="toggleSelectAllReports(this.checked)"> Select all
+                            </label>
+                            <span id="reports-sel-count" style="font-size:12px;color:var(--txt-3)"></span>
+                            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err);margin-left:auto"
+                                    id="btn-delete-reports" onclick="deleteSelectedReports()" disabled>
+                                Delete Selected
+                            </button>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th class="th-check"><input type="checkbox" id="reports-select-all-hdr" onchange="toggleSelectAllReports(this.checked)"></th>
+                                    <th>Date &amp; Time</th>
+                                    <th>Total</th>
+                                    <th>Success</th>
+                                    <th>Failed</th>
+                                    <th>No DM</th>
+                                    <th>Skipped</th>
+                                    <th>Emails</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="reports-tbody"></tbody>
+                        </table>
+                        <div id="no-reports-state" class="empty-state hidden">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                            <p>No run history yet</p>
+                            <p class="empty-sub">Export some projects to see results here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-error-logs" class="tab-panel">
+                    <div class="card card-table" id="error-logs-card">
+                        <div class="bulk-bar hidden" id="errlogs-bulk-bar">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                                <input type="checkbox" id="errlogs-select-all" onchange="toggleSelectAllErrLogs(this.checked)"> Select all
+                            </label>
+                            <span id="errlogs-sel-count" style="font-size:12px;color:var(--txt-3)"></span>
+                            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err);margin-left:auto"
+                                    id="btn-delete-errlogs" onclick="deleteSelectedErrLogs()" disabled>
+                                Delete Selected
+                            </button>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th class="th-check"><input type="checkbox" id="errlogs-select-all-hdr" onchange="toggleSelectAllErrLogs(this.checked)"></th>
+                                    <th>Timestamp</th>
+                                    <th>Project</th>
+                                    <th>Error</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="error-logs-tbody"></tbody>
+                        </table>
+                        <div id="no-errors-state" class="empty-state hidden">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                            <p>No error logs found</p>
+                            <p class="empty-sub">All recorded exports completed without errors.</p>
+                        </div>
+                        <div id="error-logs-na" class="empty-state hidden">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><circle cx="12" cy="12" r="10" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                            <p>Not available for ACC</p>
+                            <p class="empty-sub">Error log files are only captured during BIM360 exports.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden" role="alert"></div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal hidden" role="dialog">
+        <div class="modal-backdrop" onclick="closeModal()"></div>
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeModal()">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+            </button>
+            <div id="modal-content"></div>
+        </div>
     </div>
 
-    <!-- Sign In form -->
-    <form id="form-signin" class="auth-form" onsubmit="handleLogin(event)">
-      <div id="signin-success" class="auth-msg-ok hidden"></div>
-      <div id="signin-error" class="auth-msg-err hidden"></div>
-      <div class="auth-field">
-        <label class="auth-label" for="signin-email">Email</label>
-        <input class="auth-input" type="email" id="signin-email" required placeholder="you@company.com" autocomplete="email">
-      </div>
-      <div class="auth-field">
-        <label class="auth-label" for="signin-password">Password</label>
-        <input class="auth-input" type="password" id="signin-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-signin-submit">Sign In</button>
-      <p class="auth-switch-txt">No account yet? <a href="#" onclick="showAuthTab('create');return false">Create one</a></p>
-    </form>
-
-    <!-- Create Account form -->
-    <form id="form-create" class="auth-form hidden" onsubmit="handleSignup(event)">
-      <div class="auth-notice-box">
-        <svg viewBox="0 0 16 16" fill="currentColor" width="13" style="flex-shrink:0;margin-top:1px"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H7V7h2v4zm0-6H7V3h2v2z"/></svg>
-        <span>Use the email address associated with your <strong>Autodesk ACC</strong> or <strong>BIM360</strong> account so reports are delivered to the right inbox.</span>
-      </div>
-      <div id="create-error" class="auth-msg-err hidden"></div>
-      <div class="auth-field">
-        <label class="auth-label" for="create-email">Email <span class="auth-field-hint">(your Autodesk / ACC / BIM360 email)</span></label>
-        <input class="auth-input" type="email" id="create-email" required placeholder="you@company.com" autocomplete="email">
-      </div>
-      <div class="auth-field">
-        <label class="auth-label" for="create-password">Password <span class="auth-field-hint">(min. 6 characters)</span></label>
-        <input class="auth-input" type="password" id="create-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" minlength="6" autocomplete="new-password">
-      </div>
-      <div class="auth-field">
-        <label class="auth-label" for="create-confirm">Confirm Password</label>
-        <input class="auth-input" type="password" id="create-confirm" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password">
-      </div>
-      <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-create-submit">Create Account</button>
-      <p class="auth-switch-txt">Already have an account? <a href="#" onclick="showAuthTab('signin');return false">Sign in</a></p>
-    </form>
-
-    <div class="auth-footer-brand">Powered by Tzunami</div>
-  </div>
+    <!-- ════════════ PAGE: NEWPAGE — 5-step wizard ════════════ -->
+    <div id="page-newpage" class="page">
+        <div class="np-root">
+            <!-- Stepper — each step is clickable to navigate -->
+            <div class="np-stepper">
+                <div class="np-step np-active np-step-btn" id="np-s1" onclick="npGoStep(1)" title="Auth"><div class="np-circle">1</div><span>Auth</span></div>
+                <div class="np-line" id="np-l1"></div>
+                <div class="np-step np-step-btn" id="np-s2" onclick="npGoStep(2)" title="Platform"><div class="np-circle">2</div><span>Platform</span></div>
+                <div class="np-line" id="np-l2"></div>
+                <div class="np-step np-step-btn" id="np-s3" onclick="npGoStep(3)" title="Discover"><div class="np-circle">3</div><span>Discover</span></div>
+                <div class="np-line" id="np-l3"></div>
+                <div class="np-step np-step-btn" id="np-s4" onclick="npGoStep(4)" title="Export"><div class="np-circle">4</div><span>Export</span></div>
+                <div class="np-line" id="np-l4"></div>
+                <div class="np-step np-step-btn" id="np-s5" onclick="npGoStep(5)" title="Results"><div class="np-circle">5</div><span>Results</span></div>
+            </div>
+            <!-- Step 1: Auth -->
+            <div class="np-page np-page-active" id="np-page-1">
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%;">
+                    <h1 class="np-title" style="margin-top: 0; margin-bottom: 8px;">Cloudsfer Automation</h1>
+                    <p class="np-sub" style="margin-top: 0; margin-bottom: 0;">
+                        Streamline your Autodesk BIM360 and ACC document exports.<br>
+                        Securely link your account to begin discovery.
+                    </p>
+                </div>
+                <!--<h1 class="np-title">Cloudsfer Automation</h1>
+    <p class="np-sub">Streamline your Autodesk BIM360 and ACC document exports.<br>Securely link your account to begin discovery.</p>-->
+                <div class="np-auth-card" id="np-auth-idle">
+                    <div class="np-auth-icon"><svg viewBox="0 0 48 48" fill="none" width="48"><circle cx="24" cy="24" r="24" fill="#e8f0fe" /><path d="M24 13a6 6 0 016 6v3h1a2 2 0 012 2v9a2 2 0 01-2 2H17a2 2 0 01-2-2v-9a2 2 0 012-2h1v-3a6 6 0 016-6zm0 2a4 4 0 00-4 4v3h8v-3a4 4 0 00-4-4z" fill="#3b7de9" /></svg></div>
+                    <h2 class="np-auth-h2">Autodesk Authorization</h2>
+                    <p class="np-auth-p">You will be redirected to Autodesk to provide access to your project files.</p>
+                    <button class="np-btn-authorize" onclick="npStartLogin()">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" /></svg>
+                        Authorize with Autodesk
+                    </button>
+                    <p class="np-auth-secure"><svg viewBox="0 0 16 16" fill="currentColor" width="12"><path fill-rule="evenodd" d="M8 1L2 3.5V8c0 3.3 2.5 6.4 6 7 3.5-.6 6-3.7 6-7V3.5L8 1z" /></svg> Secure end-to-end encrypted connection</p>
+                </div>
+                <div class="np-auth-card np-auth-waiting hidden" id="np-auth-waiting">
+                    <div class="np-spinner"></div>
+                    <h2 class="np-auth-h2">Browser is Open — Please Sign In</h2>
+                    <p class="np-auth-p">Complete your Autodesk authentication in the browser window.</p>
+                    <div class="np-wait-steps"><p>① Enter your Autodesk email address</p><p>② Enter your password</p><p>③ Complete MFA / 2-Factor if prompted</p><p>④ Wait until the ACC dashboard fully loads</p></div>
+                    <div class="np-timer" id="np-timer">0:00</div>
+                    <p style="font-size:12px;color:#64748b;font-style:italic;margin-bottom:16px">The login window will stay open for up to 10 minutes.</p>
+                    <button class="np-btn-cancel" onclick="npCancelLogin()">Cancel</button>
+                </div>
+                <div class="np-auth-card np-auth-success hidden" id="np-auth-success"></div>
+            </div>
+            <!-- Step 2: Platform -->
+            <div class="np-page hidden" id="np-page-2">
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%;">
+                    <h1 class="np-title" style="margin-top: 0; margin-bottom: 8px;">Select Platform</h1>
+                    <p class="np-sub" style="margin-top: 0; margin-bottom: 0;">Choose the environment you want to export documents from.</p>
+                </div>
+                <!--<h1 class="np-title">Select Platform</h1>
+    <p class="np-sub">Choose the environment you want to export documents from.</p>-->
+                <div class="np-plat-list">
+                    <div class="np-plat-opt np-plat-sel" data-plat="both" onclick="npPickPlat('both')">
+                        <div class="np-plat-icon np-both-icon"><svg viewBox="0 0 24 24" fill="none" width="22"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+                        <div class="np-plat-txt"><strong>Both</strong><span>Export from all available platforms</span></div>
+                        <div class="np-plat-chk" id="np-chk-both"><svg viewBox="0 0 20 20" fill="currentColor" width="18"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg></div>
+                    </div>
+                    <div class="np-plat-opt" data-plat="acc" onclick="npPickPlat('acc')">
+                        <div class="np-plat-icon np-acc-icon"><svg viewBox="0 0 24 24" fill="none" width="22"><path d="M12 2L3 7l9 5 9-5-9-5zM3 17l9 5 9-5M3 12l9 5 9-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+                        <div class="np-plat-txt"><strong>Autodesk Forma</strong><span>Target specific Forma design projects</span></div>
+                        <div class="np-plat-chk hidden" id="np-chk-acc"><svg viewBox="0 0 20 20" fill="currentColor" width="18"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg></div>
+                    </div>
+                    <div class="np-plat-opt" data-plat="bim360" onclick="npPickPlat('bim360')">
+                        <div class="np-plat-icon np-bim-icon"><svg viewBox="0 0 24 24" fill="none" width="22"><rect x="3" y="3" width="8" height="8" rx="1" stroke="currentColor" stroke-width="2" /><rect x="13" y="3" width="8" height="8" rx="1" stroke="currentColor" stroke-width="2" /><rect x="3" y="13" width="8" height="8" rx="1" stroke="currentColor" stroke-width="2" /><rect x="13" y="13" width="8" height="8" rx="1" stroke="currentColor" stroke-width="2" /></svg></div>
+                        <div class="np-plat-txt"><strong>BIM360</strong><span>Focus on BIM360 construction documents</span></div>
+                        <div class="np-plat-chk hidden" id="np-chk-bim360"><svg viewBox="0 0 20 20" fill="currentColor" width="18"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg></div>
+                    </div>
+                </div>
+                <div class="np-footer"><button class="np-btn-primary" onclick="npGoStep(3)">Continue to Discovery →</button></div>
+            </div>
+            <!-- Step 3: Discover -->
+            <div class="np-page hidden" id="np-page-3">
+                <h1 class="np-title">Discover Projects</h1>
+                <p class="np-sub">Select the projects and document types you wish to export.</p>
+                <div class="np-admin-banner" id="np-admin-banner">
+                    <p><strong>Account Admin URL required</strong> — paste your Autodesk admin URL to discover projects</p>
+                    <div class="np-admin-row">
+                        <input type="url" id="np-url-input" placeholder="https://acc.autodesk.com/account-admin/... or https://admin.b360.autodesk.com/...">
+                        <button class="np-btn-save" onclick="npSaveAndDiscover()">Save &amp; Discover</button>
+                    </div>
+                    <p class="np-admin-hint">ACC: https://acc.autodesk.com/account-admin/projects/accounts/&lt;uuid&gt;/active &nbsp;·&nbsp; BIM360: https://admin.b360.autodesk.com/admin/&lt;uuid&gt;/projects</p>
+                </div>
+                <div class="np-toolbar">
+                    <div class="np-ftabs">
+                        <button class="np-ftab np-ftab-active" data-tab="all" onclick="npSetTab(this,'all')">All</button>
+                        <button class="np-ftab" data-tab="bim360" onclick="npSetTab(this,'bim360')">BIM360</button>
+                        <button class="np-ftab" data-tab="acc" onclick="npSetTab(this,'acc')">Forma</button>
+                    </div>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-proj-search" placeholder="Search projects..." oninput="npRenderTable()"></div>
+                </div>
+                <div class="np-table-wrap">
+                    <table class="np-table"><thead><tr><th style="width:44px;text-align:center"><input type="checkbox" id="np-chk-all" onchange="npToggleAll(this.checked)"></th><th>PROJECT NAME</th><th>PLATFORM</th><th>LAST EXPORT</th></tr></thead><tbody id="np-tbody"></tbody></table>
+                    <div id="np-empty" class="np-empty hidden">No projects. Enter your admin URL above and click Save &amp; Discover.</div>
+                </div>
+                <div class="np-footer">
+                    <span id="np-sel-count" style="font-size:14px;color:#64748b;font-weight:500">0 selected</span>
+                    <button class="np-btn-primary" id="np-btn-export" onclick="npStartExport()" disabled><svg viewBox="0 0 20 20" fill="currentColor" width="15"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" /></svg> Start Batch Export</button>
+                </div>
+            </div>
+            <!-- Step 4: Export -->
+            <div class="np-page hidden" id="np-page-4">
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%;">
+                    <h1 class="np-title" style="margin-top: 0; margin-bottom: 8px;">Exporting Documents</h1>
+                    <p class="np-sub" style="margin-top: 0; margin-bottom: 0;">Processing and reporting on selected data streams.</p>
+                </div>
+                <!--<h1 class="np-title">Exporting Documents</h1>
+    <p class="np-sub">Processing and reporting on selected data streams.</p>-->
+                <div class="np-exp-grid">
+                    <div class="np-exp-card"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-processing" id="np-badge-fetch">PROCESSING</span></div><div class="np-exp-num" id="np-fetched">0/0</div><div class="np-exp-lbl">Reports fetched</div><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-fetch" style="width:0%"></div></div></div>
+                    <div class="np-exp-card" style="border-color:#e2e8f0"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge" style="background:#f1f5f9;color:#64748b">EXEMPT</span></div><div class="np-exp-num" id="np-nodm">0</div><div class="np-exp-lbl">Projects without data management</div><p style="font-size:12px;color:#94a3b8;font-style:italic">These projects contain no valid document logs.</p></div>
+                    <div class="np-exp-card" style="grid-column:1/-1"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-finalizing" id="np-badge-rep">FINALIZING</span></div><div class="np-exp-num" id="np-reports">0/0</div><div class="np-exp-lbl">Reports Generated</div><p style="font-size:12px;color:#94a3b8;font-style:italic" id="np-rep-note">Finalizing report formatting</p><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-rep" style="width:0%"></div></div></div>
+                </div>
+                <div class="np-overall"><div class="np-overall-top"><span>● OVERALL PROGRESS: <span id="np-overall-lbl">PROCESSING</span></span><span id="np-overall-pct">0%</span></div><div class="np-overall-bar"><div class="np-overall-fill" id="np-overall-fill" style="width:0%"></div></div></div>
+                <div class="np-footer"><button class="np-btn-primary" id="np-btn-finalize" onclick="npGoStep(5)" disabled><svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg> Finalize Results</button></div>
+            </div>
+            <!-- Step 5: Results -->
+            <div class="np-page hidden" id="np-page-5">
+                <!--<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:24px">
+                    <div style="width:60px;height:60px;border-radius:50%;background:#dcfce7;border:3px solid #86efac;display:flex;align-items:center;justify-content:center;margin-bottom:16px"><svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color:#166534"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg></div>
+                    <h1 class="np-title" style="margin-bottom:8px">Summary Report</h1>
+                    <p class="np-sub" style="margin-bottom:0">Review synchronized data across your projects.</p>
+                </div>-->
+                <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; margin-bottom: 24px;">
+    <div style="width: 60px; height: 60px; border-radius: 50%; background: #dcfce7; border: 3px solid #86efac; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+        <svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color: #166534;">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+        </svg>
+    </div>
+    <h1 class="np-title" style="margin-bottom: 8px;">Summary Report</h1>
+    <p class="np-sub" style="margin-bottom: 0;">Review synchronized data across your projects.</p>
 </div>
-
-<!-- Sidebar overlay â€” shown only on mobile when sidebar is open -->
-<div id="sidebar-overlay" onclick="closeSidebar()"></div>
-
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-<aside id="sidebar">
-
-  <div class="sb-logo">
-    <img src="cloudsfer-logo.png" alt="Cloudsfer" class="sb-logo-img">
-  </div>
-
-  <nav class="sb-nav" id="sb-nav">
-
-    <div class="sb-section-label">Navigation</div>
-
-    <a class="nav-item active" data-page="welcome" id="nav-welcome">
-      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h4v-4h2v4h4a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
-      <span>Overview</span>
-    </a>
-
-    <a class="nav-item" data-page="auth" id="nav-auth">
-      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/></svg>
-      <span>Authentication</span>
-      <span class="nav-badge" id="nav-badge-auth"></span>
-    </a>
-
-    <a class="nav-item" data-page="platforms" id="nav-platforms">
-      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-      <span>Platform</span>
-      <span class="nav-badge plat-badge hidden" id="nav-badge-platform"></span>
-    </a>
-
-    <div class="sb-divider" id="sb-plat-divider"></div>
-
-    <div id="sb-plat-nav" class="hidden">
-      <div class="sb-section-label" id="sb-plat-label">Workspace</div>
-
-      <a class="nav-item" data-page="projects" id="nav-projects">
-        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
-        <span>Projects</span>
-        <span class="nav-badge" id="nav-badge-projects"></span>
-      </a>
-
-      <a class="nav-item" data-page="export" id="nav-export">
-        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
-        <span>Export</span>
-        <span class="nav-badge running-pulse hidden" id="nav-badge-export">â—</span>
-      </a>
-
-      <a class="nav-item" data-page="logs" id="nav-logs">
-        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"/></svg>
-        <span>Logs &amp; History</span>
-      </a>
+                <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:4px">Total: <strong id="np-res-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here for pricing recommendation.</a></div><button class="np-btn-primary" style="padding:10px 20px">View Pricing Plans</button></div>
+                <div class="np-res-toolbar">
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
+                    <select id="np-res-filter" onchange="npRenderResults()" style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font:14px Inter,sans-serif;background:#fff;color:#1e293b;outline:none"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select>
+                </div>
+                <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
+                <div class="np-footer" style="justify-content:center"><button class="np-btn-ghost" onclick="npReset()">Start New Export</button></div>
+            </div>
+        </div>
     </div>
+    <!-- ════════════════════════════════════════════════════════ -->
 
-  </nav>
-
-  <div class="sb-footer">
-    <div class="conn-status" id="conn-status">
-      <span class="conn-dot" id="conn-dot"></span>
-      <span id="conn-text">Connectingâ€¦</span>
-    </div>
-    <div id="sidebar-user-wrap" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);display:none">
-      <p style="font-size:10px;color:rgba(255,255,255,0.4);margin:0 0 2px">Signed in as</p>
-      <p id="sidebar-user" style="font-size:11px;color:rgba(255,255,255,0.7);margin:0;word-break:break-all"></p>
-      <button class="auth-logout-btn" id="btn-logout" onclick="logout()">
-        <svg viewBox="0 0 20 20" fill="currentColor" width="12"><path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"/></svg>
-        Sign Out
-      </button>
-    </div>
-  </div>
-</aside>
-
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MAIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-<main id="main">
-
-  <!-- Mobile topbar â€” hidden on desktop via CSS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div class="mobile-topbar" id="mobile-topbar">
-    <button class="btn-hamburger" id="btn-hamburger" onclick="toggleSidebar()" aria-label="Open menu">
-      <svg viewBox="0 0 20 20" fill="currentColor" width="18">
-        <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/>
-      </svg>
-    </button>
-    <div class="mobile-topbar-brand">
-      <img src="cloudsfer-logo.png" alt="Cloudsfer" class="mobile-logo-img">
-    </div>
-    <div class="conn-status" style="margin-left:auto">
-      <span class="conn-dot" id="conn-dot-mobile"></span>
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: WELCOME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-welcome" class="page active">
-    <div class="page-content">
-    <div class="welcome-wrap">
-
-      <div class="welcome-hero">
-        <div class="hero-badge">
-          <svg viewBox="0 0 14 14" fill="currentColor" width="11"><path d="M13.5 6H8V.5a.5.5 0 00-1 0V6H1.5a.5.5 0 000 1H7v5.5a.5.5 0 001 0V7h5.5a.5.5 0 000-1z"/></svg>
-          Powered by Tzunami
-        </div>
-        <h1>Automate Your<br><span>Autodesk Document Exports</span></h1>
-        <p class="hero-desc">Cloudsfer streamlines document log extraction across your entire Autodesk portfolio. One secure sign-on connects both ACC and BIM360 â€” then Cloudsfer handles the rest, automatically exporting Files Logs and Document Logs at scale.</p>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-primary btn-hero" onclick="navigate('auth')">
-            Get Started
-            <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
-          </button>
-          <span style="font-size:12px;color:var(--txt-3)">No configuration required after first login</span>
-        </div>
-      </div>
-
-      <div class="platform-preview-grid">
-        <div class="platform-preview-card acc-card">
-          <div class="pp-header">
-            <div class="pp-icon acc-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </div>
-            <div>
-              <h3>Autodesk Construction Cloud</h3>
-              <span class="pp-badge acc-badge">ACC</span>
-            </div>
-          </div>
-          <ul class="pp-features">
-            <li>Automated Files Log export per project</li>
-            <li>Sequential batch processing with resume</li>
-            <li>Smart BIM360 project filtering</li>
-            <li>Checkpoint recovery on interruption</li>
-          </ul>
-        </div>
-        <div class="platform-preview-card bim-card">
-          <div class="pp-header">
-            <div class="pp-icon bim-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="22" height="22"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-            </div>
-            <div>
-              <h3>Autodesk BIM 360</h3>
-              <span class="pp-badge bim-badge">BIM360</span>
-            </div>
-          </div>
-          <ul class="pp-features">
-            <li>Document Log export â€” Plans &amp; Project Files</li>
-            <li>Live progress streaming with pause &amp; resume</li>
-            <li>Detailed per-project error capture &amp; logs</li>
-            <li>Full run history &amp; report download</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="welcome-stats-row">
-        <div class="welcome-stat-item">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--brand-m)"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/></svg>
-          <div>
-            <strong>Single Sign-On</strong>
-            <span>One Autodesk login covers ACC &amp; BIM360</span>
-          </div>
-        </div>
-        <div class="welcome-stat-item">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--ok)"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/></svg>
-          <div>
-            <strong>Fully Automated</strong>
-            <span>Set up once, export hundreds of projects</span>
-          </div>
-        </div>
-        <div class="welcome-stat-item">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--warn)"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/></svg>
-          <div>
-            <strong>Inbox Delivery</strong>
-            <span>Reports emailed directly to your Autodesk account</span>
-          </div>
-        </div>
-        <div class="welcome-stat-item">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="16" style="color:var(--bim)"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
-          <div>
-            <strong>Resume Anywhere</strong>
-            <span>Checkpoint system resumes interrupted runs</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: AUTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-auth" class="page">
-    <div class="page-content">
-      <div class="steps-bar">
-        <div class="step active" id="step-1"><div class="step-dot">1</div><span class="step-label">Authenticate</span></div>
-        <div class="step-line"></div>
-        <div class="step" id="step-2"><div class="step-dot">2</div><span class="step-label">Choose Platform</span></div>
-        <div class="step-line"></div>
-        <div class="step" id="step-3"><div class="step-dot">3</div><span class="step-label">Operate</span></div>
-      </div>
-
-      <div class="pg-header">
-        <h2>Connect to Autodesk</h2>
-        <p>Sign in with your Autodesk account. One login gives you access to both ACC and BIM360 workspaces.</p>
-      </div>
-
-      <div id="session-banner" class="alert hidden"></div>
-
-      <!-- State: idle â€” show login CTA -->
-      <div id="auth-idle" class="card">
-        <div class="card-footer">
-          <div class="login-cta-row">
-            <div class="login-cta-text">
-              <p class="cta-title">Open Autodesk Login Browser</p>
-              <p class="cta-desc">A browser window will open for you to sign in securely. Complete any MFA prompts, then wait for the dashboard to load â€” the system will detect your login automatically.</p>
-            </div>
-            <button class="btn btn-primary btn-md" id="btn-login">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/></svg>
-              Open Login Browser
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- State: pending â€” browser open, waiting for login -->
-      <div id="auth-pending" class="card hidden">
-        <div class="card-body">
-          <div class="login-wait-layout">
-            <div class="login-wait-visual">
-              <div class="pulse-ring"><div class="pulse-core"></div></div>
-              <div class="wait-timer" id="wait-timer">0:00</div>
-              <p class="wait-timer-label">Time Elapsed</p>
-            </div>
-            <div class="login-wait-info">
-              <h3>Browser is Open â€” Please Sign In</h3>
-              <p class="wait-desc">Complete your Autodesk authentication in the browser window. The system will detect your login automatically.</p>
-              <ol class="login-steps-list">
-                <li>Enter your Autodesk email address</li>
-                <li>Enter your password</li>
-                <li>Complete MFA / 2-Factor verification if prompted</li>
-                <li>Wait until the ACC dashboard fully loads</li>
-              </ol>
-              <div class="wait-note" id="wait-note">
-                <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H7V7h2v4zm0-6H7V3h2v2z"/></svg>
-                Please take your time â€” the login window will stay open for up to 10 minutes.
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="card-footer">
-          <div class="wait-footer-row">
-            <div class="wait-status-chip" id="wait-status-chip">
-              <span class="spinner-sm"></span>
-              <span id="wait-status-text">Waiting for authenticationâ€¦</span>
-            </div>
-            <button class="btn btn-ghost btn-sm" id="btn-cancel-login">Cancel</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- State: success â€” session active -->
-      <div id="auth-success" class="card hidden">
-        <div class="card-body">
-          <div class="session-ok-row">
-            <div class="session-ok-icon">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg>
-            </div>
-            <div class="session-ok-text">
-              <strong>Session Active</strong>
-              <span id="auth-user-email" class="auth-user-email hidden"></span>
-              <span id="session-age-text">Session is valid.</span>
-            </div>
-            <button class="btn btn-ghost btn-sm" id="btn-relogin">Re-authenticate</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="page-actions">
-        <button class="btn btn-ghost" onclick="navigate('welcome')">Back to Overview</button>
-        <button class="btn btn-primary btn-md" id="btn-to-platforms" disabled>
-          Choose Platform 
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: PLATFORM SELECTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-platforms" class="page">
-    <div class="page-content">
-      <div class="steps-bar">
-        <div class="step done"><div class="step-dot">âœ“</div><span class="step-label">Authenticate</span></div>
-        <div class="step-line done"></div>
-        <div class="step active"><div class="step-dot">2</div><span class="step-label">Choose Platform</span></div>
-        <div class="step-line"></div>
-        <div class="step"><div class="step-dot">3</div><span class="step-label">Operate</span></div>
-      </div>
-
-      <div class="pg-header">
-        <h2>Choose Your Platform</h2>
-        <p>Select the Autodesk platform you want to work with. You can switch between platforms at any time.</p>
-      </div>
-
-      <div class="platform-cards">
-
-        <div class="platform-card acc-platform-card" id="platform-card-acc" onclick="selectPlatform('acc')">
-          <div class="plat-card-top">
-            <div class="plat-icon-wrap acc-icon-wrap">
-              <svg viewBox="0 0 32 32" fill="none" width="34" height="34"><path d="M5 26l11-20 11 20" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 19.5h15" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
-            </div>
-            <div class="plat-card-brand">
-              <span class="plat-card-sub">Autodesk</span>
-              <h3 class="plat-card-name">Construction Cloud</h3>
-            </div>
-            <span class="plat-tag acc-tag">ACC</span>
-          </div>
-          <p class="plat-card-desc">Export Files Logs across all your ACC projects automatically. Supports sequential processing with checkpoint resume and BIM360 project filtering.</p>
-          <ul class="plat-features">
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              Files Log automated export
-            </li>
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              Pause &amp; resume mid-run
-            </li>
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              BIM360 projects exported independently
-            </li>
-          </ul>
-          <div class="plat-card-stats" id="acc-plat-stats">
-            <span class="plat-stat"><span id="acc-stat-total">â€”</span> ACC</span>
-            <span class="plat-stat-sep">Â·</span>
-            <span class="plat-stat pending"><span id="acc-stat-pending">â€”</span> pending</span>
-            <span class="plat-stat-sep">Â·</span>
-            <span class="plat-stat done"><span id="acc-stat-done">â€”</span> completed</span>
-            <span class="plat-stat-sep" id="acc-bim360-sep" style="display:none">Â·</span>
-            <span class="plat-stat" id="acc-bim360-stat" style="display:none"><span id="acc-stat-bim360">0</span> BIM360</span>
-          </div>
-          <div class="plat-card-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-outline btn-sm plat-discover-btn" id="btn-discover-acc" onclick="discoverPlatform('acc')">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
-              Discover
-            </button>
-            <button class="btn plat-select-btn acc-select-btn" onclick="selectPlatform('acc')">
-              Open Workspace
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="platform-card bim-platform-card" id="platform-card-bim360" onclick="selectPlatform('bim360')">
-          <div class="plat-card-top">
-            <div class="plat-icon-wrap bim-icon-wrap">
-              <svg viewBox="0 0 32 32" fill="none" width="34" height="34"><path d="M8 4h16a2 2 0 012 2v20a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="#fff" stroke-width="2"/><path d="M11 11h10M11 16h10M11 21h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-            </div>
-            <div class="plat-card-brand">
-              <span class="plat-card-sub">Autodesk</span>
-              <h3 class="plat-card-name">BIM 360</h3>
-            </div>
-            <span class="plat-tag bim-tag">BIM360</span>
-          </div>
-          <p class="plat-card-desc">Export Document Logs for both Plans and Project Files across all BIM360 projects. Features live progress streaming, pause/resume, and detailed error capture.</p>
-          <ul class="plat-features">
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              Plans &amp; Project Files logs
-            </li>
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              Live log terminal streaming
-            </li>
-            <li>
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12"><path d="M13.854 3.646a.5.5 0 010 .708l-7 7a.5.5 0 01-.708 0l-3.5-3.5a.5.5 0 01.708-.708L6.5 10.293l6.646-6.647a.5.5 0 01.708 0z"/></svg>
-              Error screenshots &amp; logs
-            </li>
-          </ul>
-          <div class="plat-card-stats">
-            <span class="plat-stat"><span id="bim360-stat-total">â€”</span> projects</span>
-            <span class="plat-stat-sep">Â·</span>
-            <span class="plat-stat pending"><span id="bim360-stat-pending">â€”</span> pending</span>
-            <span class="plat-stat-sep">Â·</span>
-            <span class="plat-stat done"><span id="bim360-stat-done">â€”</span> completed</span>
-          </div>
-          <div class="plat-card-actions" onclick="event.stopPropagation()">
-            <button class="btn btn-outline btn-sm plat-discover-btn" id="btn-discover-bim360" onclick="discoverPlatform('bim360')">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
-              Discover
-            </button>
-            <button class="btn plat-select-btn bim-select-btn" onclick="selectPlatform('bim360')">
-              Open Workspace
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></svg>
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Discover & Export All Platforms -->
-      <div class="export-all-row" id="export-all-row">
-        <div class="export-all-inner">
-          <div class="export-all-info">
-            <svg viewBox="0 0 20 20" fill="currentColor" width="20" style="color:var(--brand-m);flex-shrink:0"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
-            <div>
-              <strong>Discover &amp; Export All Platforms</strong>
-              <p>Fetches the latest project list from ACC and BIM360, then exports everything pending â€” automatically, in one click.</p>
-            </div>
-          </div>
-          <div class="export-all-actions">
-            <button class="btn btn-primary btn-md" id="btn-discover-export-all" onclick="discoverAllAndExport()">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"/></svg>
-              Discover &amp; Export All
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="page-actions">
-        <button class="btn btn-ghost" onclick="navigate('auth')">Back to Authentication</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: PROJECTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-projects" class="page">
-    <div class="page-content">
-      <div class="pg-header pg-header-row">
-        <div>
-          <h2 id="projects-title">Projects</h2>
-          <p id="projects-desc">Select projects to include in the next export run.</p>
-        </div>
-        <div class="pg-header-actions">
-          <button class="btn btn-outline btn-sm" id="btn-discover">
-            <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"/></svg>
-            Discover Projects
-          </button>
-        </div>
-      </div>
-
-      <div class="stats-row">
-        <div class="stat-card">
-          <span class="stat-num" id="stat-total">â€”</span>
-          <span class="stat-lbl">Total</span>
-        </div>
-        <div class="stat-card stat-warn">
-          <span class="stat-num" id="stat-pending">â€”</span>
-          <span class="stat-lbl">Pending</span>
-        </div>
-        <div class="stat-card stat-ok">
-          <span class="stat-num" id="stat-completed">â€”</span>
-          <span class="stat-lbl">Completed</span>
-        </div>
-        <div class="stat-card stat-muted">
-          <span class="stat-num" id="stat-nodm">â€”</span>
-          <span class="stat-lbl">No Data Mgmt</span>
-        </div>
-      </div>
-
-      <!-- Admin URL setup â€” shown when accountAdminUrl is not configured -->
-      <div id="admin-url-setup-card" class="card hidden" style="margin-bottom:16px">
-        <div class="card-body">
-          <p style="font-weight:600;margin-bottom:4px">Account Admin URL not configured</p>
-          <p style="font-size:13px;color:var(--txt-3);margin-bottom:12px">
-            Enter your Autodesk account admin URL to enable project discovery.
-            <br>ACC format: <code style="font-size:11px">https://acc.autodesk.com/account-admin/projects/accounts/&lt;uuid&gt;/active</code>
-            <br>BIM360 format: <code style="font-size:11px">https://admin.b360.autodesk.com/admin/&lt;uuid&gt;/projects</code>
-          </p>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input class="form-input" id="admin-url-input" type="url" placeholder="Paste your account admin URL here" style="flex:1">
-            <button class="btn btn-primary btn-sm" onclick="saveAdminUrl()">Save &amp; Discover</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="table-toolbar">
-          <div class="toolbar-left">
-            <button class="btn btn-ghost btn-sm" id="btn-select-all">Select All</button>
-            <button class="btn btn-ghost btn-sm" id="btn-select-pending">Pending Only</button>
-            <button class="btn btn-ghost btn-sm" id="btn-deselect-all">Deselect All</button>
-            <button class="btn btn-ghost btn-sm btn-danger" id="btn-reset-cp">Reset Progress</button>
-          </div>
-        </div>
-
-        <div class="table-scroll" id="projects-table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="col-chk"><input type="checkbox" id="check-all"></th>
-                <th>Project Name</th>
-                <th id="th-platform">Platform</th>
-                <th>Status</th>
-                <th class="col-id">Project ID</th>
-              </tr>
-            </thead>
-            <tbody id="projects-tbody"></tbody>
-          </table>
-        </div>
-
-        <div id="no-projects-state" class="empty-state hidden">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-          <p>No projects found</p>
-          <p class="empty-sub">Click <strong>Discover Projects</strong> to fetch your project list from the Autodesk API.</p>
-        </div>
-      </div>
-
-      <div class="page-actions">
-        <button class="btn btn-ghost" onclick="navigate('platforms')">â† Change Platform</button>
-        <div class="actions-right">
-          <label class="check-label">
-            <input type="checkbox" id="export-fresh">
-            <span>Reset checkpoint before export</span>
-          </label>
-          <button class="btn btn-primary btn-md" id="btn-start-export" disabled>
-            Start Export
-            <span class="sel-count-badge" id="selected-count">0</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: EXPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-export" class="page">
-    <div class="page-content page-export-content">
-
-      <div class="export-topbar">
-        <div class="export-title-group">
-          <h2 id="export-title">Export in Progress</h2>
-          <p id="export-subtitle" class="text-muted">Processing projects one by oneâ€¦</p>
-        </div>
-        <div class="export-topbar-right">
-          <div id="export-run-controls" class="hidden">
-            <button class="btn btn-warn btn-sm" id="btn-pause">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>
-              Pause
-            </button>
-            <button class="btn btn-success btn-sm hidden" id="btn-resume">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
-              Resume
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="progress-card">
-        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <div class="progress-fill" id="progress-fill"></div>
-        </div>
-        <div class="progress-meta">
-          <span id="progress-text">0 of 0 projects</span>
-          <span class="progress-pct" id="progress-pct">0%</span>
-        </div>
-      </div>
-
-      <div class="stats-grid" id="export-stats-grid">
-        <div class="stat-card stat-done">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>
-          </div>
-          <div class="stat-body">
-            <span class="stat-export-label">Done</span>
-            <span class="stat-export-value" id="chip-success">0</span>
-          </div>
-        </div>
-        <div class="stat-card stat-fail">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-          </div>
-          <div class="stat-body">
-            <span class="stat-export-label">Failed</span>
-            <span class="stat-export-value" id="chip-failed">0</span>
-          </div>
-        </div>
-        <div class="stat-card stat-nodm">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8" stroke-linecap="round"/></svg>
-          </div>
-          <div class="stat-body">
-            <span class="stat-export-label">No DM</span>
-            <span class="stat-export-value" id="chip-nodm">0</span>
-          </div>
-        </div>
-        <div class="stat-card stat-skip">
-          <div class="stat-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v14M5 12l11-7v14z"/></svg>
-          </div>
-          <div class="stat-body">
-            <span class="stat-export-label">Skipped</span>
-            <span class="stat-export-value" id="chip-skipped">0</span>
-          </div>
-        </div>
-      </div>
-
-      <div id="pause-banner" class="alert alert-warn hidden">
-        <svg viewBox="0 0 20 20" fill="currentColor" width="15"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"/></svg>
-        Export is paused. Click <strong>Resume</strong> to continue with the next project.
-      </div>
-
-      <div class="export-body log-hidden" id="export-body">
-
-        <div class="export-panel" id="panel-projects">
-          <div class="panel-header">
-            <span>Projects</span>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="panel-count" id="proj-panel-count"></span>
-              <button class="btn btn-ghost btn-xs" id="btn-show-log" onclick="toggleLogPanel()">
-                <svg viewBox="0 0 20 20" fill="currentColor" width="11"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z"/></svg>
-                Show Logs
-              </button>
-            </div>
-          </div>
-          <div class="table-scroll export-progress-scroll">
-            <table class="data-table export-progress-table">
-              <thead>
-                <tr>
-                  <th>Project Name</th>
-                  <th class="psi-th-status">Status</th>
-                </tr>
-              </thead>
-              <tbody id="export-project-list"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="export-panel log-panel" id="panel-log">
-          <div class="panel-header">
-            <span>Live Log</span>
-            <div class="log-controls">
-              <label class="toggle-sm">
-                <input type="checkbox" id="log-autoscroll" checked>
-                <span>Auto-scroll</span>
-              </label>
-              <button class="btn btn-ghost btn-xs" id="btn-clear-log">Clear</button>
-              <button class="btn btn-ghost btn-xs" id="btn-toggle-log" onclick="toggleLogPanel()">Hide</button>
-            </div>
-          </div>
-          <div class="terminal" id="log-terminal"></div>
-        </div>
-
-      </div>
-
-      <div id="export-complete-card" class="complete-card hidden">
-        <div class="complete-icon-wrap" id="complete-icon"></div>
-        <div class="complete-text">
-          <h3 id="complete-title">Export Complete</h3>
-          <p id="complete-sub" class="text-muted"></p>
-        </div>
-        <div class="complete-stats">
-          <div class="cstat"><span id="cs-success">0</span><label>Successful</label></div>
-          <div class="cstat cstat-err"><span id="cs-failed">0</span><label>Failed</label></div>
-          <div class="cstat cstat-acc"><span id="cs-emails">0</span><label>Emails Queued</label></div>
-          <div class="cstat cstat-muted"><span id="cs-skipped">0</span><label>Skipped</label></div>
-        </div>
-        <div class="complete-actions">
-          <button class="btn btn-ghost" onclick="navigate('projects')">â† Back to Projects</button>
-          <button class="btn btn-outline" onclick="navigate('logs')">View Run Logs</button>
-          <button class="btn btn-primary" onclick="startNewRun()">Start New Run</button>
-        </div>
-      </div>
-
-      <!-- Projects without Document Management â€” shown after export completes -->
-      <div id="nodm-retry-section" class="hidden">
-        <div class="panel-header" style="margin-top:20px;padding:0 0 10px">
-          <span style="font-size:14px;font-weight:700;color:var(--txt)">Projects Without Document Management</span>
-          <span class="panel-count" id="nodm-count"></span>
-        </div>
-        <p style="font-size:13px;color:var(--txt-3);margin:0 0 12px">These projects were skipped because Document Management was unavailable. Select and retry if you think this was a navigation error.</p>
-        <div class="card">
-          <div class="table-scroll">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="col-chk"><input type="checkbox" id="nodm-check-all" onchange="toggleAllNoDm(this.checked)"></th>
-                  <th>Project Name</th>
-                  <th class="col-id">Project ID</th>
-                </tr>
-              </thead>
-              <tbody id="nodm-retry-tbody"></tbody>
-            </table>
-          </div>
-          <div style="padding:12px 16px;border-top:1px solid var(--brd);display:flex;justify-content:flex-end">
-            <button class="btn btn-outline btn-sm" id="btn-retry-nodm" onclick="retrySelectedNoDm()">
-              <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
-              Retry Selected
-            </button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: LOGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-  <div id="page-logs" class="page">
-    <div class="page-content">
-      <div class="pg-header pg-header-row">
-        <div>
-          <h2 id="logs-title">Logs &amp; History</h2>
-          <p>Detailed results from every export run and captured error events.</p>
-        </div>
-        <button class="btn btn-outline btn-sm" id="btn-refresh-logs">
-          <svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
-          Refresh
-        </button>
-      </div>
-
-      <div class="tabs">
-        <button class="tab-btn active" data-tab="run-history">Run History</button>
-        <button class="tab-btn" data-tab="error-logs" id="tab-btn-errors">Error Logs <span class="tab-cnt" id="error-count"></span></button>
-      </div>
-
-      <div id="tab-run-history" class="tab-panel active">
-        <div class="card card-table">
-          <div class="bulk-bar hidden" id="reports-bulk-bar">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="checkbox" id="reports-select-all" onchange="toggleSelectAllReports(this.checked)"> Select all
-            </label>
-            <span id="reports-sel-count" style="font-size:12px;color:var(--txt-3)"></span>
-            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err);margin-left:auto"
-                    id="btn-delete-reports" onclick="deleteSelectedReports()" disabled>Delete Selected</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="th-check"><input type="checkbox" id="reports-select-all-hdr" onchange="toggleSelectAllReports(this.checked)"></th>
-                <th>Date &amp; Time</th>
-                <th>Total</th>
-                <th>Success</th>
-                <th>Failed</th>
-                <th>No DM</th>
-                <th>Skipped</th>
-                <th>Emails</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="reports-tbody"></tbody>
-          </table>
-          <div id="no-reports-state" class="empty-state hidden">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            <p>No run history yet</p>
-            <p class="empty-sub">Export some projects to see results here.</p>
-          </div>
-        </div>
-      </div>
-
-      <div id="tab-error-logs" class="tab-panel">
-        <div class="card card-table" id="error-logs-card">
-          <div class="bulk-bar hidden" id="errlogs-bulk-bar">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-              <input type="checkbox" id="errlogs-select-all" onchange="toggleSelectAllErrLogs(this.checked)"> Select all
-            </label>
-            <span id="errlogs-sel-count" style="font-size:12px;color:var(--txt-3)"></span>
-            <button class="btn btn-sm" style="background:var(--err);color:#fff;border-color:var(--err);margin-left:auto"
-                    id="btn-delete-errlogs" onclick="deleteSelectedErrLogs()" disabled>Delete Selected</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="th-check"><input type="checkbox" id="errlogs-select-all-hdr" onchange="toggleSelectAllErrLogs(this.checked)"></th>
-                <th>Timestamp</th>
-                <th>Project</th>
-                <th>Error</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="error-logs-tbody"></tbody>
-          </table>
-          <div id="no-errors-state" class="empty-state hidden">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <p>No error logs found</p>
-            <p class="empty-sub">All recorded exports completed without errors.</p>
-          </div>
-          <div id="error-logs-na" class="empty-state hidden">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" width="48" height="48"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            <p>Not available for ACC</p>
-            <p class="empty-sub">Error log files are only captured during BIM360 exports.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-</main>
-
-<!-- Toast -->
-<div id="toast" class="toast hidden" role="alert"></div>
-
-<!-- Modal -->
-<div id="modal" class="modal hidden" role="dialog">
-  <div class="modal-backdrop" onclick="closeModal()"></div>
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeModal()">
-      <svg viewBox="0 0 20 20" fill="currentColor" width="16"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
-    </button>
-    <div id="modal-content"></div>
-  </div>
-</div>
-
-<script src="app.js?v=8"></script>
+    <script src="app.js?v=8"></script>
 </body>
 </html>
-
 
 
 
