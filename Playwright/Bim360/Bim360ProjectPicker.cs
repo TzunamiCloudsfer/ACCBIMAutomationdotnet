@@ -48,7 +48,7 @@ namespace AutodeskAutomation.Playwright.Bim360
             {
                 await Page.GotoAsync(docsUrl, new PageGotoOptions
                     { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30_000 });
-                await Task.Delay(4000);
+                await Task.Delay(2000);
 
                 var landed = Page.Url;
                 Console.WriteLine($"[bim360] ACC docs/files landed: {landed}");

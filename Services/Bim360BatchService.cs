@@ -295,9 +295,12 @@ namespace AutodeskAutomation.Services
                                 : await rptBrowser.NewContextAsync();
                             var rptPage = await rptCtx.NewPageAsync();
 
-                            await NavigateToReportsAndCapture(
+                            var summary = await NavigateToReportsAndCapture(
                                 rptPage, project, result.ReportsUrl,
                                 opts.UserEmail, result.ExportTriggeredAt);
+                            result.TotalFiles         = summary.TotalFiles;
+                            result.TotalSizeBytes     = summary.TotalSizeBytes;
+                            result.TotalSizeFormatted = summary.TotalSizeFormatted;
                         }
                         finally { await rptBrowser.CloseAsync(); }
                     }
@@ -338,8 +341,12 @@ namespace AutodeskAutomation.Services
                 srv.Bim360.ProjectStatuses[project.ProjectId] = new ProjectStatus
                     { Status = result.Status, Name = project.Name, Error = result.Error };
 
-                sse.Broadcast("project-done", new { project = new { id = project.ProjectId, name = project.Name },
-                    status = result.Status, error = result.Error, platform = "bim360" });
+                sse.Broadcast("project-done", new {
+                    project = new { id = project.ProjectId, name = project.Name },
+                    status = result.Status, error = result.Error,
+                    totalFiles = result.TotalFiles,
+                    totalSizeFormatted = result.TotalSizeFormatted,
+                    platform = "bim360" });
                 sse.Broadcast("progress-update", new { completed = i + 1, total = pending.Count,
                     results = new { results.Success, results.Failed, no_dm = results.NoDm,
                         results.Skipped, results.EmailsQueued }, platform = "bim360" });
@@ -358,7 +365,7 @@ namespace AutodeskAutomation.Services
         }   // end RunBatchInternal
 
         // After export: navigate to Reports page, capture report rows + screenshots
-        private static async Task NavigateToReportsAndCapture(
+        private static async Task<(int TotalFiles, long TotalSizeBytes, string TotalSizeFormatted)> NavigateToReportsAndCapture(
             IPage page, ProjectDocument project, string reportsUrl, string? userEmail,
             DateTime exportTriggeredAt = default)
         {
@@ -374,7 +381,7 @@ namespace AutodeskAutomation.Services
 
                 await page.GotoAsync(reportsUrl, new PageGotoOptions
                     { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30_000 });
-                await Task.Delay(6000);  // give React SPA time to render
+                await Task.Delay(3000);  // give React SPA time to render
                 Console.WriteLine($"[reports] URL: {page.Url}");
 
                 // Wait for the report list table to load
@@ -382,7 +389,7 @@ namespace AutodeskAutomation.Services
                 var table = page.Locator("[data-testid=\"report-list-table\"]");
                 // Wait up to 30s for the React SPA to render the reports table
                 bool tableFound = false;
-                for (int t = 0; t < 6; t++)  // 6 x 5s = 30s
+                for (int t = 0; t < 10; t++)  // 10 x 3s = 30s
                 {
                     if (await table.CountAsync() > 0) { tableFound = true; break; }
                     await Task.Delay(5000);
@@ -402,7 +409,7 @@ namespace AutodeskAutomation.Services
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] Reports table not found after 35s -- URL: {page.Url}",
                         platform = "bim360" });
-                    return;
+                    return (0, 0L, "");
                 }
 
                 // Poll for a report row whose "Run at" datetime is AFTER exportTriggeredAt.
@@ -469,7 +476,7 @@ namespace AutodeskAutomation.Services
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] No new report found after {maxWaitSec}s",
                         platform = "bim360" });
-                    return;
+                    return (0, 0L, "");
                 }
 
                 // Use the specific row by index
@@ -548,7 +555,7 @@ namespace AutodeskAutomation.Services
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] Download failed after {MaxDownloadAttempts} attempts",
                         platform = "bim360" });
-                    return;
+                    return (0, 0L, "");
                 }
 
                 // Save the downloaded Excel file
@@ -562,8 +569,8 @@ namespace AutodeskAutomation.Services
                     message = $"[{project.Name}] Excel downloaded: {fileName}",
                     platform = "bim360" });
 
-                // Read the Excel file and extract summary
-                await ReadExcelSummary(filePath, project, userEmail, sse);
+                // Read the Excel file and extract summary; return file count + size
+                return await ReadExcelSummary(filePath, project, userEmail, sse);
             }
             catch (Exception ex)
             {
@@ -571,18 +578,19 @@ namespace AutodeskAutomation.Services
                 sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                     message = $"[{project.Name}] Reports capture error: {ex.Message}",
                     platform = "bim360" });
+                return (0, 0L, "");
             }
         }
 
-        private static async Task ReadExcelSummary(
+        private static async Task<(int TotalFiles, long TotalSizeBytes, string TotalSizeFormatted)> ReadExcelSummary(
             string filePath, ProjectDocument project, string? userEmail, SseService sse)
         {
-            await Task.Run(() =>
+            return await Task.Run(() =>
             {
                 try
                 {
                     using var workbook = new ClosedXML.Excel.XLWorkbook(filePath);
-                    if (workbook.Worksheets.Count == 0) return;
+                    if (workbook.Worksheets.Count == 0) return (0, 0L, "");
 
                     // The ACC Files Log Excel has 2 sheets:
                     //   Sheet 1 "Overview"  — metadata (project name, total items, etc.)
@@ -594,7 +602,7 @@ namespace AutodeskAutomation.Services
 
                     var lastRow = ws.LastRowUsed();
                     var lastCol = ws.LastColumnUsed();
-                    if (lastRow == null) return;
+                    if (lastRow == null) return (0, 0L, "");
 
                     int rowCount = lastRow.RowNumber();
                     int colCount = lastCol?.ColumnNumber() ?? 0;
@@ -685,7 +693,7 @@ namespace AutodeskAutomation.Services
                         message = $"[{project.Name}] Files Log Summary:\n{summaryText}",
                         platform = "bim360" });
 
-                    // Also broadcast a dedicated summary event for the UI
+                    // Broadcast summary event for live UI update
                     sse.Broadcast("files-log-summary", new
                     {
                         projectId   = project.ProjectId,
@@ -696,24 +704,26 @@ namespace AutodeskAutomation.Services
                         platform    = "bim360"
                     });
 
-                    // Save to RavenDB -- include total files + size in the title/notes
+                    // Persist to RavenDB
                     var db = DatabaseService.Instance;
                     using var session = db.OpenSession();
                     var docId = $"reports/excel/{System.Text.RegularExpressions.Regex.Replace(project.ProjectId, @"[^\w]", "")}";
                     var existing = session.Load<Models.Documents.ReportDocument>(docId);
                     var doc = existing ?? new Models.Documents.ReportDocument { Id = docId };
-                    doc.ProjectId   = project.ProjectId;
-                    doc.UserEmail   = userEmail;
-                    doc.Platform    = "bim360";
-                    doc.Title       = $"{Path.GetFileName(filePath)} | {totalFiles:N0} files | {totalSizeStr}";
-                    doc.Status      = "complete";
-                    doc.DownloadUrl = filePath;
+                    doc.ProjectId    = project.ProjectId;
+                    doc.UserEmail    = userEmail;
+                    doc.Platform     = "bim360";
+                    doc.Title        = $"{Path.GetFileName(filePath)} | {totalFiles:N0} files | {totalSizeStr}";
+                    doc.Status       = "complete";
+                    doc.DownloadUrl  = filePath;
                     doc.ErrorMessage = $"Total files: {totalFiles:N0}, Total size: {totalSizeStr}";
-                    doc.CompletedAt = DateTime.UtcNow;
-                    doc.FirstSeenAt = doc.FirstSeenAt == default ? DateTime.UtcNow : doc.FirstSeenAt;
-                    doc.LastSeenAt  = DateTime.UtcNow;
+                    doc.CompletedAt  = DateTime.UtcNow;
+                    doc.FirstSeenAt  = doc.FirstSeenAt == default ? DateTime.UtcNow : doc.FirstSeenAt;
+                    doc.LastSeenAt   = DateTime.UtcNow;
                     if (existing == null) session.Store(doc);
                     session.SaveChanges();
+
+                    return (totalFiles, totalSizeBytes, totalSizeStr);
                 }
                 catch (Exception ex)
                 {
@@ -721,6 +731,7 @@ namespace AutodeskAutomation.Services
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] Excel read failed: {ex.Message}",
                         platform = "bim360" });
+                    return (0, 0L, "");
                 }
             });
         }
@@ -863,10 +874,14 @@ namespace AutodeskAutomation.Services
         public double Duration { get; set; }
         public int EmailsQueued { get; set; }
 
-        // ACC deferred report capture -- set by ExportDocumentLog so batch loop
-        // can update chips immediately, then open a NEW browser for the report
+        // ACC deferred report capture
         public string? ReportsUrl { get; set; }
         public DateTime ExportTriggeredAt { get; set; }
+
+        // Populated after Excel report is read
+        public int TotalFiles { get; set; }
+        public long TotalSizeBytes { get; set; }
+        public string TotalSizeFormatted { get; set; } = "";
     }
 }
 

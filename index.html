@@ -583,7 +583,7 @@
                         </label>
                         <button class="btn btn-primary btn-md" id="btn-start-export" disabled>
                             Start Export
-                            <span class="sel-count-badge" id="selected-count">0</span>
+                            <span class="sel-count-badge" id="selected-count"></span>
                         </button>
                     </div>
                 </div>
@@ -620,6 +620,52 @@
                     <div class="progress-meta">
                         <span id="progress-text">0 of 0 projects</span>
                         <span class="progress-pct" id="progress-pct">0%</span>
+                    </div>
+                </div>
+
+                <!-- ── Active-export visualization card ───────────────────── -->
+                <div id="active-export-card" class="aec hidden">
+                    <div class="aec-left">
+                        <div class="aec-pulse-wrap">
+                            <span class="aec-ring aec-ring-1"></span>
+                            <span class="aec-ring aec-ring-2"></span>
+                            <span class="aec-ring aec-ring-3"></span>
+                            <span class="aec-dot"></span>
+                        </div>
+                        <div class="aec-text">
+                            <span class="aec-eyebrow">Exporting Documents</span>
+                            <span class="aec-name" id="aec-name">—</span>
+                            <span class="aec-sub" id="aec-sub">Processing and reporting on selected data streams.</span>
+                        </div>
+                    </div>
+                    <div class="aec-steps" id="aec-steps">
+                        <div class="aec-step aec-step-active" id="aec-step-1">
+                            <div class="aec-step-icon">
+                                <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="7"/><path d="M9 5v4l2.5 2"/></svg>
+                            </div>
+                            <span class="aec-step-label">Navigate</span>
+                        </div>
+                        <div class="aec-step-line"></div>
+                        <div class="aec-step" id="aec-step-2">
+                            <div class="aec-step-icon">
+                                <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9h12M10 5l5 4-5 4"/></svg>
+                            </div>
+                            <span class="aec-step-label">Export</span>
+                        </div>
+                        <div class="aec-step-line"></div>
+                        <div class="aec-step" id="aec-step-3">
+                            <div class="aec-step-icon">
+                                <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="2" width="12" height="14" rx="1.5"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>
+                            </div>
+                            <span class="aec-step-label">Report</span>
+                        </div>
+                        <div class="aec-step-line"></div>
+                        <div class="aec-step" id="aec-step-4">
+                            <div class="aec-step-icon">
+                                <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l4.5 4.5L15 5"/></svg>
+                            </div>
+                            <span class="aec-step-label">Done</span>
+                        </div>
                     </div>
                 </div>
 
@@ -686,6 +732,8 @@
                                     <tr>
                                         <th>Project Name</th>
                                         <th class="psi-th-status">Status</th>
+                                        <th class="psi-th-files">Files</th>
+                                        <th class="psi-th-size">Total Size</th>
                                     </tr>
                                 </thead>
                                 <tbody id="export-project-list"></tbody>
@@ -1018,7 +1066,7 @@
     </div>
     <!-- ════════════════════════════════════════════════════════ -->
 
-    <script src="app.js?v=8"></script>
+    <script src="app.js?v=16"></script>
 </body>
 </html>
 

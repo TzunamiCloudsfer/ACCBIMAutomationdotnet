@@ -170,8 +170,11 @@ function connectSSE() {
     sseRetry = setTimeout(connectSSE, 3000);
   };
   sse.onmessage = e => {
-    try { const { type, data } = JSON.parse(e.data); handleEvent(type, data); }
-    catch { /* ignore malformed */ }
+    let type, data;
+    try { ({ type, data } = JSON.parse(e.data)); }
+    catch { return; }   // ignore malformed JSON only
+    try { handleEvent(type, data); }
+    catch (err) { console.error('[SSE handler error]', type, err); }
   };
 }
 
@@ -279,11 +282,10 @@ function handleEvent(type, data) {
       break;
 
     case 'log':
-      // Show logs if they match the current platform OR the running platform,
-      // or if no platform is specified (server-level messages)
       if (!platform || platform === A.platform || platform === A.runningPlatform || platform === 'auth') {
         A.logs.push(data);
         appendLog(data);
+        aecAdvanceFromLog(data.message || '');
       }
       break;
 
@@ -310,47 +312,70 @@ function handleEvent(type, data) {
     case 'export-start':
       if (platform === 'acc')    A.accRunning    = true;
       if (platform === 'bim360') A.bim360Running = true;
-      A.exportRunning = true;
-      if (isCurrentPlatform) {
+      A.exportRunning   = true;
+      if (platform) { A.runningPlatform = platform; A.platform = platform; }
+      {
         A.exportStatus = 'running'; A.exportPaused = false;
-        A.runningPlatform = platform || A.platform;
         A.progress  = { completed: 0, total: data.total };
         A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
         A.projStatuses = {};
-        if (A.page !== 'export') navigate('export');
+        // Don't navigate away from the wizard — it manages its own export page (np-page-4)
+        if (A.page !== 'export' && A.page !== 'newpage') navigate('export');
         navBadgeExport(true);
         syncChips(); syncProgress();
         showEl('export-complete-card', false);
         showEl('pause-banner', false);
+        aecHide();
         setExportTitle('Export in Progress', 'Processing projects one by one…');
         syncExportPage(); updatePauseResumeUI();
       }
       break;
 
     case 'project-start':
-      if (isCurrentPlatform) {
+      {
         const id1 = data.project.id || data.project.name;
         A.projStatuses[id1] = { status: 'exporting', name: data.project.name };
         upsertPSI(id1, 'exporting', data.project.name);
         setText('proj-panel-count', `${data.index}/${data.total}`);
+        aecShow(data.project.name, data.index, data.total);
       }
       break;
 
     case 'project-done':
-      if (isCurrentPlatform) {
+      {
         const id2 = data.project.id || data.project.name;
-        A.projStatuses[id2] = { status: data.status, name: data.project.name, error: data.error };
+        // Merge files/size into existing state entry (files-log-summary may have already set them)
+        const existing2 = A.projStatuses[id2] || {};
+        A.projStatuses[id2] = {
+          ...existing2,
+          status: data.status,
+          name:   data.project.name,
+          error:  data.error,
+          files:  data.totalFiles != null && data.totalFiles > 0
+                    ? Number(data.totalFiles).toLocaleString()
+                    : (existing2.files || '—'),
+          size:   data.totalSizeFormatted || existing2.size || '—',
+        };
         upsertPSI(id2, data.status, data.project.name, data.error);
+        aecDone(data.status);
+        npSyncProjectDone(data);
       }
       break;
 
     case 'progress-update':
-      if (isCurrentPlatform) {
-        A.progress = { completed: data.completed, total: data.total };
-        A.results  = { ...data.results };
-        syncChips(); syncProgress();
+      A.progress = { completed: data.completed, total: data.total };
+      if (data.results) {
+        A.results = {
+          success:      data.results.success      || 0,
+          failed:       data.results.failed       || 0,
+          no_dm:        data.results.no_dm  || data.results.noDm  || 0,
+          skipped:      data.results.skipped      || 0,
+          emailsQueued: data.results.emailsQueued || 0,
+        };
       }
+      syncChips(); syncProgress();
+      npSyncProgress(data);
       break;
 
     case 'export-paused':
@@ -370,23 +395,33 @@ function handleEvent(type, data) {
       break;
 
     case 'export-complete':
-      // Always clear the platform-specific flag regardless of which page is active
       if (platform === 'acc')    A.accRunning    = false;
       if (platform === 'bim360') A.bim360Running = false;
       if (!A.chainRunning) {
         A.exportRunning   = A.accRunning || A.bim360Running;
         if (!A.exportRunning) { A.runningPlatform = null; navBadgeExport(false); }
       }
-      refreshPlatformStats(); // update pending counts in platform tab
-      // Reload project list so status changes to "completed" are visible
-      loadProjects(); // refresh regardless of current page
-      if (isCurrentPlatform) {
-        A.exportStatus = 'complete'; A.exportPaused = false;
-        A.results = { ...data.results };
-        syncChips(); syncProgress();
-        showExportComplete(data.results);
-        updatePauseResumeUI();
+      // Always update results regardless of current platform — export just finished
+      A.exportStatus = 'complete'; A.exportPaused = false;
+      if (data.results) {
+        A.results = {
+          success:      data.results.success      || 0,
+          failed:       data.results.failed       || 0,
+          no_dm:        data.results.no_dm  || data.results.noDm  || 0,
+          skipped:      data.results.skipped      || 0,
+          emailsQueued: data.results.emailsQueued || 0,
+        };
       }
+      // Advance progress bar to 100% — final total comes from progress-update; use what we have
+      if (A.progress.total > 0)
+        A.progress.completed = A.progress.total;
+      syncChips(); syncProgress();
+      showExportComplete(A.results);
+      updatePauseResumeUI();
+      refreshPlatformStats();
+      loadProjects();
+      aecHide();
+      npSyncComplete();
       break;
 
     case 'export-error':
@@ -515,6 +550,22 @@ function handleEvent(type, data) {
       updatePauseResumeUI();
       refreshPlatformStats();
       _resetDiscoverAllBtn();
+      break;
+
+    case 'files-log-summary':
+      {
+        const pid = data.projectId || data.projectName;
+        if (pid) {
+          // Persist in state so upsertPSI can always read it, regardless of DOM timing
+          if (!A.projStatuses[pid]) A.projStatuses[pid] = {};
+          A.projStatuses[pid].files = data.totalFiles  != null ? Number(data.totalFiles).toLocaleString() : '—';
+          A.projStatuses[pid].size  = data.totalSizeFormatted || '—';
+          // Also update live row if it exists
+          updatePsiSummary(pid, data.totalFiles, data.totalSizeFormatted);
+          // Update wizard NP project entry too
+          npSyncFileSummary(pid, A.projStatuses[pid].files, A.projStatuses[pid].size);
+        }
+      }
       break;
 
     case 'user-changed': {
@@ -1015,8 +1066,10 @@ function updateStartBtn() {
   const cnt = $('selected-count');
   const n   = A.selectedIds.size;
   const thisPlatformRunning = A.platform === 'acc' ? A.accRunning : A.platform === 'bim360' ? A.bim360Running : A.exportRunning;
-  if (btn) btn.disabled = n === 0 || thisPlatformRunning || A.chainRunning;
-  if (cnt) cnt.textContent = n;
+  // Enable when there are projects to export (selected or pending), not just when selection is non-empty
+  const hasProjects = A.projects.length > 0;
+  if (btn) btn.disabled = !hasProjects || thisPlatformRunning || A.chainRunning;
+  if (cnt) cnt.textContent = n > 0 ? n : '';
 }
 
 async function discoverProjects() {
@@ -1070,10 +1123,11 @@ async function resetCheckpoint() {
 }
 
 async function startExport() {
+  if (!A.platform) { showToast('Select a platform (ACC or BIM360) first.', 'warning'); navigate('platforms'); return; }
   const fresh = $('export-fresh') && $('export-fresh').checked;
   const ids   = [...A.selectedIds];
-  if (!ids.length) { showToast('No projects selected.', 'warning'); return; }
-  try { await api(`/api/${A.platform}/export/start`, 'POST', { projectIds: ids, fresh }); }
+  // If nothing explicitly selected, export all (empty projectIds → controller exports all pending)
+  try { await api(`/api/${A.platform}/export/start`, 'POST', { projectIds: ids.length ? ids : [], fresh }); }
   catch (e) { showToast(`Could not start export: ${e.message}`, 'error'); }
 }
 
@@ -1231,27 +1285,121 @@ function setExportTitle(title, sub) {
 function upsertPSI(id, status, name, error) {
   const list = $('export-project-list');
   if (!list) return;
-  const escapedId = CSS.escape(id);
-  let el = document.getElementById(`psi-${escapedId}`);
-  if (!el) {
+  // Use a simple sanitized key for the element ID — avoid CSS.escape edge cases
+  const rowKey    = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+  const rowId     = 'psi-' + rowKey;
+  let el = document.getElementById(rowId);
+  const isNew = !el;
+  if (isNew) {
     el = document.createElement('tr');
-    el.id = `psi-${escapedId}`;
-    el.className = 'psi-row fade-in';
+    el.id = rowId;
+    el.setAttribute('data-pid', id);
     list.appendChild(el);
   }
-  el.className = `psi-row${status === 'exporting' ? ' psi-row-current' : ''}`;
+  el.className = 'psi-row' + (status === 'exporting' ? ' psi-row-current' : '');
   const badgeClass = { pending: 'badge-pending', exporting: 'badge-warn', success: 'badge-completed', failed: 'badge-failed', no_dm: 'badge-muted', skipped: 'badge-muted' }[status] || 'badge-pending';
   const badgeLabel = {
     pending:   '⏳ Pending',
     exporting: '<span class="spinner-sm" style="width:9px;height:9px;border-width:1.5px"></span> Processing…',
     success:   '✓ Done',
-    failed:    `✗ ${trunc(error || 'Failed', 22)}`,
+    failed:    '✗ ' + trunc(error || 'Failed', 22),
     no_dm:     '⊘ No DM',
     skipped:   '↷ Skipped',
   }[status] || status;
+
+  // Read files/size from state (more reliable than reading from DOM cells)
+  const projState     = A.projStatuses && A.projStatuses[id];
+  const existingFiles = (projState && projState.files) ? projState.files : '—';
+  const existingSize  = (projState && projState.size)  ? projState.size  : '—';
+
   el.innerHTML = `
     <td class="psi-name-cell" title="${esc(name)}">${esc(name)}</td>
-    <td class="psi-status-cell"><span class="badge ${badgeClass}">${badgeLabel}</span></td>`;
+    <td class="psi-status-cell"><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+    <td class="psi-files-cell mono-id">${esc(existingFiles)}</td>
+    <td class="psi-size-cell  mono-id">${esc(existingSize)}</td>`;
+}
+
+function updatePsiSummary(projectId, totalFiles, totalSizeFormatted) {
+  const rowKey = String(projectId).replace(/[^a-zA-Z0-9]/g, '_');
+  const row    = document.getElementById('psi-' + rowKey);
+  if (!row) return;
+  const fc = row.querySelector('.psi-files-cell');
+  const sc = row.querySelector('.psi-size-cell');
+  if (fc) fc.textContent = totalFiles != null ? Number(totalFiles).toLocaleString() : '—';
+  if (sc) sc.textContent = totalSizeFormatted || '—';
+}
+
+// ── Active-export visualization card ─────────────────────────────────────────
+let _aecStep = 0;
+let _aecHideTimer = null;
+
+function aecShow(name, index, total) {
+  clearTimeout(_aecHideTimer);
+  _aecStep = 1;
+  const card   = $('active-export-card');
+  const nameEl = $('aec-name');
+  const subEl  = $('aec-sub');
+  if (!card) return;
+  if (nameEl) nameEl.textContent = name   || '—';
+  if (subEl)  subEl.textContent  = 'Project ' + index + ' of ' + total + ' — navigating to Data Management…';
+  card.classList.remove('hidden');
+  _aecSetStep(1);
+}
+
+function aecHide() {
+  clearTimeout(_aecHideTimer);
+  const card = $('active-export-card');
+  if (card) card.classList.add('hidden');
+  _aecStep = 0;
+}
+
+function aecDone(status) {
+  _aecSetStep(4, status === 'success' ? 'done' : 'skip');
+  clearTimeout(_aecHideTimer);
+  _aecHideTimer = setTimeout(aecHide, 1800);
+}
+
+function _aecSetStep(step, finalState) {
+  _aecStep = step;
+  for (let i = 1; i <= 4; i++) {
+    const el = $(`aec-step-${i}`);
+    if (!el) continue;
+    el.classList.remove('aec-step-active', 'aec-step-done');
+    if (i < step) el.classList.add('aec-step-done');
+    else if (i === step) {
+      if (finalState === 'done' || finalState === 'skip') el.classList.add('aec-step-done');
+      else el.classList.add('aec-step-active');
+    }
+  }
+}
+
+function aecAdvanceFromLog(msg) {
+  if (!msg || _aecStep === 0) return;
+  const m   = msg.toLowerCase();
+  const sub = $('aec-sub');
+
+  // Step 2 — Export triggered
+  if (_aecStep < 2 && (
+    m.includes('toolbar detected') || m.includes('files log') ||
+    m.includes('export submitted') || m.includes('document log') ||
+    m.includes('acc toolbar') || m.includes('bim360 toolbar'))) {
+    _aecSetStep(2);
+    if (sub) sub.textContent = 'Triggering document log export…';
+  }
+  // Step 3 — Report capture
+  else if (_aecStep < 3 && (
+    m.includes('navigating to reports') || m.includes('waiting for report') ||
+    m.includes('found report row') || m.includes('opening report'))) {
+    _aecSetStep(3);
+    if (sub) sub.textContent = 'Waiting for report to generate…';
+  }
+  // Step 4 — Excel read / done
+  else if (_aecStep < 4 && (
+    m.includes('excel downloaded') || m.includes('files log summary') ||
+    m.includes('total files') || m.includes('done --'))) {
+    _aecSetStep(4);
+    if (sub) sub.textContent = 'Reading file summary from Excel report…';
+  }
 }
 
 function showExportComplete(results) {
@@ -1972,36 +2120,50 @@ function npStartTimer(){
 }
 function npClearTimer(){if(NP.loginTimer){clearInterval(NP.loginTimer);NP.loginTimer=null;}}
 
-// Hook into existing SSE
-setTimeout(function(){
-  if(!window.sse)return;
-  var orig=window.sse.onmessage;
-  window.sse.onmessage=function(e){
-    if(orig)orig.call(this,e);
-    if(typeof A==='undefined'||A.page!=='newpage')return;
-    try{
-      var ev=JSON.parse(e.data),type=ev.type,data=ev.data||{};
-      if(type==='login-status'){
-        if(data.status==='browser-open'||data.status==='waiting')npShowWaiting();
-        if(data.status==='completed'){npClearTimer();npShowSuccess(data.user);setTimeout(function(){npGoStep(2);},1200);}
-        if(data.status==='failed'){npClearTimer();npShowIdle();}
-        if(data.status==='cancelled'){npClearTimer();npShowIdle();}
-      }
-      if(type==='discover-complete'&&NP.step===3)npLoadProjects();
-      if(type==='progress-update'&&NP.step===4){
-        var r=data.results||{};
-        NP.export.completed=data.completed||0;NP.export.total=data.total||NP.export.total;
-        NP.export.success=r.Success||r.success||0;NP.export.noDm=r.NoDm||r.no_dm||0;
-        npUpdateExport();
-      }
-      if((type==='export-complete'||type==='export-all-complete')&&NP.step===4){
-        NP.export.running=false;npUpdateExport();
-        var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=false;
-        npSetOverall(100,'COMPLETE');
-      }
-    }catch(err){}
-  };
-},1000);
+// ── Wizard (NP) sync functions — called directly from handleEvent ─────────────
+function npSyncProgress(data) {
+  if (NP.step !== 4) return;
+  var r = data.results || {};
+  NP.export.completed = data.completed || 0;
+  NP.export.total     = data.total     || NP.export.total;
+  NP.export.success   = r.success || r.Success || 0;
+  NP.export.noDm      = r.no_dm   || r.noDm    || r.NoDm || 0;
+  if (typeof npUpdateExport === 'function') npUpdateExport();
+}
+
+function npSyncProjectDone(data) {
+  if (NP.step !== 4) return;
+  var status = data.status;
+  NP.export.completed = (NP.export.completed || 0) + 1;
+  if (status === 'success') NP.export.success = (NP.export.success || 0) + 1;
+  if (status === 'no_dm')   NP.export.noDm    = (NP.export.noDm    || 0) + 1;
+
+  // Store files/size directly on the NP project entry
+  var pid  = data.project && (data.project.id || data.project.name);
+  var proj = pid && NP.projects.find(function(p) { return p.id === pid || p.name === pid; });
+  if (proj) {
+    proj.files  = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : (proj.files || '—');
+    proj.size   = data.totalSizeFormatted || proj.size || '—';
+    proj.status = status;
+  }
+
+  if (typeof npUpdateExport === 'function') npUpdateExport();
+}
+
+function npSyncComplete() {
+  if (NP.step !== 4) return;
+  NP.export.running = false;
+  if (typeof npUpdateExport === 'function') npUpdateExport();
+  var bf = document.getElementById('np-btn-finalize');
+  if (bf) bf.disabled = false;
+  if (typeof npSetOverall === 'function') npSetOverall(100, 'COMPLETE');
+}
+
+function npSyncFileSummary(projectId, files, size) {
+  var proj = NP.projects.find(function(p) { return p.id === projectId || p.name === projectId; });
+  if (proj) { proj.files = files; proj.size = size; }
+  if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
+}
 
 function npPickPlat(p){
   NP.platform=p;
@@ -2128,8 +2290,31 @@ function npRenderResults(){
   });
   if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
   tbody.innerHTML=list.map(function(p){
-    var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
-    return '<tr><td style="color:#3b7de9;font-weight:500">'+e2(p.name)+'</td><td>'+badge+'</td><td>—</td><td>—</td></tr>';
+    var platBadge = p.platform==='bim360'
+      ? '<span class="np-badge-bim360">BIM360</span>'
+      : '<span class="np-badge-acc">ACC</span>';
+
+    // Prefer data stored directly on NP project entry (set by npSyncProjectDone)
+    // Fall back to A.projStatuses keyed by project ID
+    var ps    = A.projStatuses && A.projStatuses[p.id];
+    var files = p.files || (ps && ps.files) || '—';
+    var size  = p.size  || (ps && ps.size)  || '—';
+    var status = p.status || (ps && ps.status) || '';
+
+    var statusBadge = status === 'success'
+      ? '<span style="color:#16a34a;font-weight:700;font-size:11px">✓ Done</span>'
+      : status === 'no_dm'
+        ? '<span style="color:#d97706;font-size:11px">⊘ No DM</span>'
+        : status === 'failed'
+          ? '<span style="color:#dc2626;font-size:11px">✗ Failed</span>'
+          : '<span style="color:#94a3b8;font-size:11px">—</span>';
+
+    return '<tr>'
+      +'<td style="font-weight:500;color:#1e293b">'+e2(p.name)+'</td>'
+      +'<td>'+platBadge+'</td>'
+      +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(files)+'</td>'
+      +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(size)+'</td>'
+      +'</tr>';
   }).join('');
 }
 function npReset(){
