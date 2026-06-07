@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AutodeskAutomation.Helpers;
@@ -184,24 +185,66 @@ namespace AutodeskAutomation.Services
 
             var runId = db.CreateRun(opts.UserEmail, "bim360");
 
-            var pending = opts.Fresh ? new List<ProjectDocument>(projects)
+            // If checkpoint was cleared (reset), treat as Fresh regardless of opts flag.
+            // This guards against RavenDB index staleness and missed FreshNext flags.
+            if (!opts.Fresh)
+            {
+                var cp = db.LoadCheckpoint(opts.UserEmail, "bim360");
+                if (cp.Completed.Count == 0 && cp.NoDm.Count == 0)
+                    opts.Fresh = true;
+            }
+
+            var pending = opts.Fresh
+                ? new List<ProjectDocument>(projects)
                 : projects.FindAll(p => !db.IsCompleted(opts.UserEmail, "bim360", p)
                                      && !db.IsNoDm(opts.UserEmail, "bim360", p));
 
             var results = new BatchResult { Skipped = projects.Count - pending.Count };
 
-            // "" Broadcast export-start FIRST so A.runningPlatform is set on the client ""
-            // All subsequent log events will then pass the isCurrentPlatform check.
-            sse.Broadcast("export-start", new { total = pending.Count, skipped = results.Skipped, platform = "bim360" });
+            // ── Reset per-project live state for this run ──────────────────────
+            // Pre-populate every pending project as "pending" so that clients
+            // connecting mid-export (or after page refresh) see the full list,
+            // not just projects that have already been processed.
+            srv.Bim360.ProjectStatuses.Clear();
+            foreach (var p in pending)
+                srv.Bim360.ProjectStatuses[p.ProjectId] = new ProjectStatus
+                    { Status = "pending", Name = p.Name };
 
-            // Diagnostic logs (now visible because export-start already fired)
+            // Also reset skipped projects so they show their final state
+            foreach (var p in projects)
+            {
+                if (!srv.Bim360.ProjectStatuses.ContainsKey(p.ProjectId))
+                {
+                    var skippedStatus = db.IsCompleted(opts.UserEmail, "bim360", p) ? "success"
+                                      : db.IsNoDm(opts.UserEmail, "bim360", p)      ? "no_dm"
+                                      : "skipped";
+                    srv.Bim360.ProjectStatuses[p.ProjectId] = new ProjectStatus
+                        { Status = skippedStatus, Name = p.Name };
+                }
+            }
+
+            // ── Broadcast export-start with full project list ──────────────────
+            // Including the project list lets the frontend render all rows at once
+            // instead of one by one as project-start events arrive.
+            sse.Broadcast("export-start", new {
+                total    = pending.Count,
+                skipped  = results.Skipped,
+                platform = "bim360",
+                projects = projects.Select(p => new {
+                    id     = p.ProjectId,
+                    name   = p.Name,
+                    status = srv.Bim360.ProjectStatuses.TryGetValue(p.ProjectId, out var ps)
+                             ? ps.Status : "pending"
+                }).ToList()
+            });
+
             sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                message = $"BIM360 batch starting --  accountId={opts.AccountId ?? "NULL"}, auth={authExists}, projects={projects.Count}, pending={pending.Count}",
+                message = $"BIM360 batch starting -- accountId={opts.AccountId ?? "NULL"}, auth={authExists}, projects={projects.Count}, pending={pending.Count}",
                 platform = "bim360" });
 
-            srv.Bim360.Progress.Total = pending.Count;
+            srv.Bim360.Progress.Total     = pending.Count;
             srv.Bim360.Progress.Completed = 0;
-            srv.Bim360.ExportStatus = "running";
+            srv.Bim360.ExportStatus       = "running";
 
             for (int i = 0; i < pending.Count; i++)
             {
@@ -340,6 +383,11 @@ namespace AutodeskAutomation.Services
                 srv.Bim360.Progress.Completed = i + 1;
                 srv.Bim360.ProjectStatuses[project.ProjectId] = new ProjectStatus
                     { Status = result.Status, Name = project.Name, Error = result.Error };
+                srv.Bim360.Results.Success      = results.Success;
+                srv.Bim360.Results.Failed       = results.Failed;
+                srv.Bim360.Results.NoDm         = results.NoDm;
+                srv.Bim360.Results.Skipped      = results.Skipped;
+                srv.Bim360.Results.EmailsQueued = results.EmailsQueued;
 
                 sse.Broadcast("project-done", new {
                     project = new { id = project.ProjectId, name = project.Name },
@@ -358,7 +406,10 @@ namespace AutodeskAutomation.Services
                 results.Failed, results.Skipped, results.EmailsQueued, note);
 
             srv.Bim360.ExportStatus = "complete";
-            sse.Broadcast("export-complete", new { results, stopped = results.Stopped, platform = "bim360" });
+            sse.Broadcast("export-complete", new {
+                results = new { results.Success, results.Failed, no_dm = results.NoDm,
+                    results.Skipped, results.EmailsQueued },
+                stopped = results.Stopped, platform = "bim360" });
 
             Reset();
             return results;

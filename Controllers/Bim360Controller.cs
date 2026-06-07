@@ -99,11 +99,25 @@ namespace AutodeskAutomation.Controllers
         }
 
         [HttpDelete, Route("checkpoint")]
-        public IHttpActionResult ResetCheckpoint()
+        public async Task<IHttpActionResult> ResetCheckpoint()
         {
+            // Stop any running export first
+            if (_srv.Bim360Running)
+            {
+                Bim360BatchService.Instance.Stop();
+                await Task.Delay(600);           // let background task notice the stop
+                _srv.Bim360Running = false;
+                _srv.Bim360Paused  = false;
+                _srv.Bim360.Reset();
+            }
+
             _db.ResetCheckpoint(_srv.ActiveUser, "bim360");
-            Bim360BatchService.Instance.Stop();
-            return Ok(new { status = "ok" });
+            _srv.Bim360FreshNext = true;   // next export start will treat all projects as pending
+
+            var total = _db.GetProjects(_srv.ActiveUser, "bim360").Count;
+            _sse.Broadcast("checkpoint-reset", new { platform = "bim360", total });
+
+            return Ok(new { status = "ok", total });
         }
 
         [HttpPost, Route("checkpoint/reset-projects")]
@@ -142,11 +156,20 @@ namespace AutodeskAutomation.Controllers
             var accountId = allProjects.FirstOrDefault(p => p.AccountId != null)?.AccountId
                 ?? ExtractAccountId(adminUrl ?? "");
 
-            if (body?.Fresh == true) _db.ResetCheckpoint(_srv.ActiveUser, "bim360");
+            // Consume the fresh-next flag set by ResetCheckpoint, or honour explicit body flag
+            bool fresh = (body?.Fresh == true) || _srv.Bim360FreshNext;
+            _srv.Bim360FreshNext = false;
+
+            if (fresh) _db.ResetCheckpoint(_srv.ActiveUser, "bim360");
 
             var projects = body?.ProjectIds?.Count > 0
                 ? allProjects.Where(p => body.ProjectIds.Contains(p.ProjectId)).ToList()
                 : allProjects;
+
+            // Explicitly selected projects should always be exported, even if previously completed.
+            // Reset only those checkpoints so the batch filter treats them as pending.
+            if (body?.ProjectIds?.Count > 0 && !fresh)
+                _db.ResetProjectsCheckpoint(_srv.ActiveUser, "bim360", body.ProjectIds);
 
             _srv.Bim360.Reset();
             _srv.Bim360Running = true;
@@ -158,10 +181,11 @@ namespace AutodeskAutomation.Controllers
                 {
                     await Bim360BatchService.Instance.RunBatch(projects, new BatchOptions
                     {
-                        UserEmail = _srv.ActiveUser,
-                        AuthStatePath = GetSharedAuthPath(),
-                        AccountId = accountId,
-                        ScreenshotsDir = GetBim360ScreenshotsDir()
+                        UserEmail      = _srv.ActiveUser,
+                        AuthStatePath  = GetSharedAuthPath(),
+                        AccountId      = accountId,
+                        ScreenshotsDir = GetBim360ScreenshotsDir(),
+                        Fresh          = fresh
                     });
                 }
                 catch (Exception ex)

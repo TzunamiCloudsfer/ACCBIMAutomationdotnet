@@ -320,7 +320,22 @@ function handleEvent(type, data) {
         A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
         A.projStatuses = {};
-        // Don't navigate away from the wizard — it manages its own export page (np-page-4)
+
+        // Pre-populate all projects with their initial status so the table
+        // renders the full list immediately — not one row at a time.
+        // Explicitly omit files/size so stale values from a previous run don't show.
+        if (data.projects && data.projects.length) {
+          data.projects.forEach(function(p) {
+            const id = p.id || p.name;
+            A.projStatuses[id] = { status: p.status || 'pending', name: p.name };
+            // No files/size — they must come from the new run's files-log-summary / project-done
+          });
+        }
+        // Also clear stale files/size on NP project entries (wizard re-run)
+        if (typeof NP !== 'undefined' && NP.projects) {
+          NP.projects.forEach(function(p) { delete p.files; delete p.size; delete p.status; });
+        }
+
         if (A.page !== 'export' && A.page !== 'newpage') navigate('export');
         navBadgeExport(true);
         syncChips(); syncProgress();
@@ -352,10 +367,9 @@ function handleEvent(type, data) {
           status: data.status,
           name:   data.project.name,
           error:  data.error,
-          files:  data.totalFiles != null && data.totalFiles > 0
-                    ? Number(data.totalFiles).toLocaleString()
-                    : (existing2.files || '—'),
-          size:   data.totalSizeFormatted || existing2.size || '—',
+          // Always set fresh values — never inherit stale data from a previous run
+          files:  (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—',
+          size:   data.totalSizeFormatted || '—',
         };
         upsertPSI(id2, data.status, data.project.name, data.error);
         aecDone(data.status);
@@ -550,6 +564,29 @@ function handleEvent(type, data) {
       updatePauseResumeUI();
       refreshPlatformStats();
       _resetDiscoverAllBtn();
+      break;
+
+    case 'checkpoint-reset':
+      if (platform === 'acc')    A.accRunning    = false;
+      if (platform === 'bim360') A.bim360Running = false;
+      A.exportRunning   = A.accRunning || A.bim360Running;
+      A.exportStatus    = 'idle';
+      A.exportPaused    = false;
+      A.runningPlatform = A.exportRunning ? A.runningPlatform : null;
+      A.progress        = { completed: 0, total: 0 };
+      A.results         = { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+      A.projStatuses    = {};
+      if (!A.exportRunning) navBadgeExport(false);
+      syncChips(); syncProgress();
+      showEl('export-complete-card', false);
+      showEl('pause-banner', false);
+      aecHide();
+      updatePauseResumeUI();
+      setExportTitle('Ready', 'Checkpoint reset — all projects queued for next run.');
+      loadProjects();
+      // Also refresh wizard project table if on step 3
+      if (A.page === 'newpage' && NP.step === 3) npLoadProjects();
+      showToast('Checkpoint reset — ' + (data.total || 0) + ' projects re-queued.', 'info');
       break;
 
     case 'files-log-summary':
@@ -1110,16 +1147,22 @@ function setPlatDiscoverBusy(platform, busy) {
 
 async function resetCheckpoint() {
   if (!A.platform) return;
-  const isActivelyRunning = A.exportRunning && A.runningPlatform === A.platform;
-  const msg = isActivelyRunning
-    ? 'An export is currently running. Reset checkpoint? The export will stop immediately and all projects will be re-queued for the next run.'
-    : 'Reset checkpoint? All projects will be marked as pending and re-exported on the next run.';
+  const isRunning = A.exportRunning && A.runningPlatform === A.platform;
+  const msg = isRunning
+    ? 'Export is running. Stop and reset all progress for ' + A.platform.toUpperCase() + '? All projects will be re-queued.'
+    : 'Reset all progress for ' + A.platform.toUpperCase() + '? All projects will be re-queued for the next run.';
   if (!confirm(msg)) return;
+
+  const btn = $('btn-reset-cp');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
   try {
     await api(`/api/${A.platform}/checkpoint`, 'DELETE');
-    showToast('Checkpoint reset.', 'info');
-    loadProjects();
-  } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
+    // SSE 'checkpoint-reset' event will arrive and update the UI
+  } catch (e) {
+    showToast('Reset failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Reset Progress'; }
+  }
 }
 
 async function startExport() {
@@ -2142,8 +2185,9 @@ function npSyncProjectDone(data) {
   var pid  = data.project && (data.project.id || data.project.name);
   var proj = pid && NP.projects.find(function(p) { return p.id === pid || p.name === pid; });
   if (proj) {
-    proj.files  = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : (proj.files || '—');
-    proj.size   = data.totalSizeFormatted || proj.size || '—';
+    // Always overwrite — never fall back to stale values from a previous run
+    proj.files  = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—';
+    proj.size   = data.totalSizeFormatted || '—';
     proj.status = status;
   }
 
@@ -2253,6 +2297,8 @@ async function npStartExport(){
 }
 function npOnEnterExport(){
   NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0};
+  // Clear stale file data from previous run so results table shows fresh values
+  NP.projects.forEach(function(p){ delete p.files; delete p.size; delete p.status; });
   var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;npUpdateExport();
 }
 function npUpdateExport(){
@@ -2294,12 +2340,12 @@ function npRenderResults(){
       ? '<span class="np-badge-bim360">BIM360</span>'
       : '<span class="np-badge-acc">ACC</span>';
 
-    // Prefer data stored directly on NP project entry (set by npSyncProjectDone)
-    // Fall back to A.projStatuses keyed by project ID
-    var ps    = A.projStatuses && A.projStatuses[p.id];
-    var files = p.files || (ps && ps.files) || '—';
-    var size  = p.size  || (ps && ps.size)  || '—';
-    var status = p.status || (ps && ps.status) || '';
+    // A.projStatuses always has the freshest data from the current run.
+    // p.files/p.size may be stale from a previous run — use as last resort only.
+    var ps     = A.projStatuses && A.projStatuses[p.id];
+    var files  = (ps && ps.files)  || p.files  || '—';
+    var size   = (ps && ps.size)   || p.size   || '—';
+    var status = (ps && ps.status) || p.status || '';
 
     var statusBadge = status === 'success'
       ? '<span style="color:#16a34a;font-weight:700;font-size:11px">✓ Done</span>'
@@ -2317,6 +2363,35 @@ function npRenderResults(){
       +'</tr>';
   }).join('');
 }
+async function npResetCheckpoint() {
+  var platforms = NP.platform === 'acc' ? ['acc']
+                : NP.platform === 'bim360' ? ['bim360']
+                : ['acc', 'bim360'];
+
+  var platLabel = platforms.join(' + ').toUpperCase();
+  if (!confirm('Reset all export progress for ' + platLabel + '?\n\nAll completed projects will be marked as pending and re-exported on the next run.')) return;
+
+  var btn = document.getElementById('np-btn-reset-cp');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+
+  try {
+    await Promise.all(platforms.map(function(p) {
+      return fetch('/api/' + p + '/checkpoint', { method: 'DELETE' });
+    }));
+    // SSE 'checkpoint-reset' will fire and reload projects via npLoadProjects
+    // But also reload directly here as a safety net
+    setTimeout(npLoadProjects, 800);
+    if (typeof showToast !== 'undefined') showToast('Checkpoint reset for ' + platLabel + '.', 'info');
+  } catch(e) {
+    if (typeof showToast !== 'undefined') showToast('Reset failed: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg> Reset Checkpoint';
+    }
+  }
+}
+
 function npReset(){
   NP.selectedIds.clear();NP.projects=[];
   NP.export={running:false,completed:0,total:0,noDm:0,success:0};

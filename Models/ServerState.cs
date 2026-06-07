@@ -18,6 +18,10 @@
         public bool Bim360Paused { get; set; }
         public bool ChainRunning { get; set; }
 
+        // Set by ResetCheckpoint — forces Fresh=true on the next export start
+        public bool Bim360FreshNext { get; set; }
+        public bool AccFreshNext { get; set; }
+
         public string? ActiveUser { get; set; }
         public string? ActiveUserSlug { get; set; }
 

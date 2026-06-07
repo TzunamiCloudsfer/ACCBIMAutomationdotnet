@@ -84,11 +84,23 @@ namespace AutodeskAutomation.Controllers
 
         //  Checkpoint ────────────────────────────────────────────────────────────
         [HttpDelete, Route("checkpoint")]
-        public IHttpActionResult ResetCheckpoint()
+        public async Task<IHttpActionResult> ResetCheckpoint()
         {
+            if (_srv.AccRunning)
+            {
+                AccBatchService.Instance.Stop();
+                await Task.Delay(600);
+                _srv.AccRunning = false;
+                _srv.Acc.Reset();
+            }
+
             _db.ResetCheckpoint(_srv.ActiveUser, "acc");
-            AccBatchService.Instance.Stop();
-            return Ok(new { status = "ok" });
+            _srv.AccFreshNext = true;
+
+            var total = _db.GetProjects(_srv.ActiveUser, "acc").Count;
+            _sse.Broadcast("checkpoint-reset", new { platform = "acc", total });
+
+            return Ok(new { status = "ok", total });
         }
 
         [HttpPost, Route("checkpoint/reset-projects")]
@@ -120,9 +132,17 @@ namespace AutodeskAutomation.Controllers
                 return Request.CreateResponse(HttpStatusCode.BadRequest,
                     new { error = "No projects configured. Run Discover first." });
 
+            bool fresh = (body?.Fresh == true) || _srv.AccFreshNext;
+            _srv.AccFreshNext = false;
+
             var projects = body?.ProjectIds?.Count > 0
                 ? allProjects.Where(p => body.ProjectIds.Contains(p.ProjectId)).ToList()
                 : allProjects;
+
+            // Explicitly selected projects should always be exported, even if previously completed.
+            // Reset only those checkpoints so the batch filter treats them as pending.
+            if (body?.ProjectIds?.Count > 0 && !fresh)
+                _db.ResetProjectsCheckpoint(_srv.ActiveUser, "acc", body.ProjectIds);
 
             _srv.Acc.Reset();
             _srv.AccRunning = true;
@@ -134,8 +154,8 @@ namespace AutodeskAutomation.Controllers
                 {
                     await AccBatchService.Instance.RunBatch(projects, new BatchOptions
                     {
-                        UserEmail = _srv.ActiveUser,
-                        Fresh = body?.Fresh ?? false,
+                        UserEmail      = _srv.ActiveUser,
+                        Fresh          = fresh,
                         ScreenshotsDir = GetAccScreenshotsDir()
                     });
                 }

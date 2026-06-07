@@ -80,6 +80,14 @@ namespace AutodeskAutomation.Services
             foreach (var p in bim360Projects)
                 db.MarkFilteredBim360(opts.UserEmail, "acc", p);
 
+            // If checkpoint is empty (e.g. after reset), force Fresh so all projects are re-exported
+            if (!opts.Fresh)
+            {
+                var cp = db.LoadCheckpoint(opts.UserEmail, "acc");
+                if (cp.Completed.Count == 0 && cp.NoDm.Count == 0)
+                    opts.Fresh = true;
+            }
+
             var toProcess = opts.Fresh
                 ? projects.FindAll(p => !string.Equals(p.RawPlatform, "bim360", StringComparison.OrdinalIgnoreCase))
                 : projects.FindAll(p =>
@@ -88,6 +96,24 @@ namespace AutodeskAutomation.Services
                     !db.IsNoDm(opts.UserEmail, "acc", p));
 
             var results = new BatchResult { Skipped = projects.Count - toProcess.Count };
+
+            // Pre-populate project statuses so SSE reconnects restore the full list
+            srv.Acc.ProjectStatuses.Clear();
+            foreach (var p in toProcess)
+                srv.Acc.ProjectStatuses[p.ProjectId] = new ProjectStatus { Status = "pending", Name = p.Name };
+            foreach (var p in projects)
+            {
+                if (!srv.Acc.ProjectStatuses.ContainsKey(p.ProjectId))
+                {
+                    var isBim360 = string.Equals(p.RawPlatform, "bim360", StringComparison.OrdinalIgnoreCase);
+                    var skipSt = isBim360 ? "skipped"
+                        : db.IsCompleted(opts.UserEmail, "acc", p) ? "success"
+                        : db.IsNoDm(opts.UserEmail, "acc", p) ? "no_dm"
+                        : "skipped";
+                    srv.Acc.ProjectStatuses[p.ProjectId] = new ProjectStatus { Status = skipSt, Name = p.Name };
+                }
+            }
+
             sse.Broadcast("export-start", new { total = toProcess.Count, skipped = results.Skipped, platform = "acc" });
 
             srv.Acc.Progress.Total = toProcess.Count;
@@ -172,6 +198,13 @@ namespace AutodeskAutomation.Services
                 }
 
                 srv.Acc.Progress.Completed = i + 1;
+                srv.Acc.ProjectStatuses[project.ProjectId] = new ProjectStatus
+                    { Status = result.Status, Name = project.Name, Error = result.Error };
+                srv.Acc.Results.Success      = results.Success;
+                srv.Acc.Results.Failed       = results.Failed;
+                srv.Acc.Results.NoDm         = results.NoDm;
+                srv.Acc.Results.Skipped      = results.Skipped;
+                srv.Acc.Results.EmailsQueued = results.EmailsQueued;
                 sse.Broadcast("project-done", new { project = new { id = project.ProjectId, name = project.Name },
                     status = result.Status, error = result.Error, platform = "acc" });
                 sse.Broadcast("progress-update", new { completed = i + 1, total = toProcess.Count,
@@ -186,7 +219,10 @@ namespace AutodeskAutomation.Services
             srv.AccRunning = false;
             srv.AccPaused = false;
             srv.Acc.ExportStatus = "complete";
-            sse.Broadcast("export-complete", new { results, stopped = results.Stopped, platform = "acc" });
+            sse.Broadcast("export-complete", new {
+                results = new { results.Success, results.Failed, no_dm = results.NoDm,
+                    results.Skipped, results.EmailsQueued },
+                stopped = results.Stopped, platform = "acc" });
 
             Reset();
             return results;

@@ -248,8 +248,13 @@ function handleEvent(type, data) {
           A.logs = liveData.recentLogs;
           replayLogs(liveData.recentLogs);
         }
-        A.progress     = liveData?.progress     || { completed: 0, total: 0 };
-        A.results      = liveData?.results      || { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+        A.progress     = liveData?.progress || { completed: 0, total: 0 };
+        { const sr = liveData?.results;
+          A.results = sr
+            ? { success: sr.success || 0, failed: sr.failed || 0,
+                no_dm: sr.no_dm ?? sr.noDm ?? 0,
+                skipped: sr.skipped || 0, emailsQueued: sr.emailsQueued || 0 }
+            : { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 }; }
         A.projStatuses = liveData?.projectStatuses || {};
         A.exportStatus = liveData?.exportStatus || 'idle';
       }
@@ -361,9 +366,12 @@ function handleEvent(type, data) {
       refreshPlatformStats(); // update pending counts in platform tab
       if (isCurrentPlatform) {
         A.exportStatus = 'complete'; A.exportPaused = false;
-        A.results = { ...data.results };
+        const r = data.results || {};
+        A.results = { success: r.success || 0, failed: r.failed || 0,
+          no_dm: r.no_dm ?? r.noDm ?? 0,
+          skipped: r.skipped || 0, emailsQueued: r.emailsQueued || 0 };
         syncChips(); syncProgress();
-        showExportComplete(data.results);
+        showExportComplete(A.results);
         updatePauseResumeUI();
       }
       break;
@@ -1144,7 +1152,7 @@ function syncChips() {
   const r = A.results;
   setText('chip-success', r.success || 0);
   setText('chip-failed',  r.failed  || 0);
-  setText('chip-nodm',    r.no_dm   || 0);
+  setText('chip-nodm',    r.no_dm ?? r.noDm ?? 0);
   setText('chip-skipped', r.skipped || 0);
 }
 
