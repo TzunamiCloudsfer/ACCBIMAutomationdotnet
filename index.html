@@ -10,63 +10,7 @@
     <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
-    <!--body class="wizard-fullscreen">-->
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CLOUDSFER AUTH OVERLAY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
-    <div id="auth-overlay" class="auth-overlay">
-        <div class="auth-card">
-
-            <div class="auth-logo-wrap">
-                <img src="cloudsfer-logo.png" alt="Cloudsfer" class="auth-logo-img">
-            </div>
-
-            <div class="auth-tabs">
-                <button class="auth-tab-btn active" id="tab-signin" onclick="showAuthTab('signin')">Sign In</button>
-                <button class="auth-tab-btn" id="tab-create" onclick="showAuthTab('create')">Create Account</button>
-            </div>
-
-            <!-- Sign In form -->
-            <form id="form-signin" class="auth-form" onsubmit="handleLogin(event)">
-                <div id="signin-success" class="auth-msg-ok hidden"></div>
-                <div id="signin-error" class="auth-msg-err hidden"></div>
-                <div class="auth-field">
-                    <label class="auth-label" for="signin-email">Email</label>
-                    <input class="auth-input" type="email" id="signin-email" required placeholder="you@company.com" autocomplete="email">
-                </div>
-                <div class="auth-field">
-                    <label class="auth-label" for="signin-password">Password</label>
-                    <input class="auth-input" type="password" id="signin-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password">
-                </div>
-                <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-signin-submit">Sign In</button>
-                <p class="auth-switch-txt">No account yet? <a href="#" onclick="showAuthTab('create');return false">Create one</a></p>
-            </form>
-
-            <!-- Create Account form -->
-            <form id="form-create" class="auth-form hidden" onsubmit="handleSignup(event)">
-                <div class="auth-notice-box">
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="13" style="flex-shrink:0;margin-top:1px"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H7V7h2v4zm0-6H7V3h2v2z" /></svg>
-                    <span>Use the email address associated with your <strong>Autodesk ACC</strong> or <strong>BIM360</strong> account so reports are delivered to the right inbox.</span>
-                </div>
-                <div id="create-error" class="auth-msg-err hidden"></div>
-                <div class="auth-field">
-                    <label class="auth-label" for="create-email">Email <span class="auth-field-hint">(your Autodesk / ACC / BIM360 email)</span></label>
-                    <input class="auth-input" type="email" id="create-email" required placeholder="you@company.com" autocomplete="email">
-                </div>
-                <div class="auth-field">
-                    <label class="auth-label" for="create-password">Password <span class="auth-field-hint">(min. 6 characters)</span></label>
-                    <input class="auth-input" type="password" id="create-password" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" minlength="6" autocomplete="new-password">
-                </div>
-                <div class="auth-field">
-                    <label class="auth-label" for="create-confirm">Confirm Password</label>
-                    <input class="auth-input" type="password" id="create-confirm" required placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password">
-                </div>
-                <button type="submit" class="btn btn-primary auth-submit-btn" id="btn-create-submit">Create Account</button>
-                <p class="auth-switch-txt">Already have an account? <a href="#" onclick="showAuthTab('signin');return false">Sign in</a></p>
-            </form>
-
-            <div class="auth-footer-brand">Powered by Tzunami</div>
-        </div>
-    </div>
-
+  
     <!-- Sidebar overlay â€” shown only on mobile when sidebar is open -->
     <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
@@ -165,7 +109,7 @@
         </div>
 
         <!-- â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ PAGE: WELCOME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-        <div id="page-welcome" class="page active">
+        <div id="page-welcome" class="page">
             <div class="page-content">
                 <div class="welcome-wrap">
 
@@ -919,7 +863,7 @@
     </div>
 
     <!-- ════════════ PAGE: NEWPAGE — 5-step wizard ════════════ -->
-    <div id="page-newpage" class="page">
+    <div id="page-newpage" class="page active">
         <div class="np-root">
             <!-- Stepper — each step is clickable to navigate -->
             <div class="np-stepper">
@@ -996,14 +940,14 @@
             <div class="np-page hidden" id="np-page-3">
                 <h1 class="np-title">Discover Projects</h1>
                 <p class="np-sub">Select the projects and document types you wish to export.</p>
-                <div class="np-admin-banner" id="np-admin-banner">
+                <!--<div class="np-admin-banner" id="np-admin-banner">
                     <p><strong>Account Admin URL required</strong> — paste your Autodesk admin URL to discover projects</p>
                     <div class="np-admin-row">
                         <input type="url" id="np-url-input" placeholder="https://acc.autodesk.com/account-admin/... or https://admin.b360.autodesk.com/...">
                         <button class="np-btn-save" onclick="npSaveAndDiscover()">Save &amp; Discover</button>
                     </div>
                     <p class="np-admin-hint">ACC: https://acc.autodesk.com/account-admin/projects/accounts/&lt;uuid&gt;/active &nbsp;·&nbsp; BIM360: https://admin.b360.autodesk.com/admin/&lt;uuid&gt;/projects</p>
-                </div>
+                </div>-->
                 <div class="np-toolbar">
                     <div class="np-ftabs">
                         <button class="np-ftab np-ftab-active" data-tab="all" onclick="npSetTab(this,'all')">All</button>
