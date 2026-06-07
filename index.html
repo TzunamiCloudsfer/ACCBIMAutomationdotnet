@@ -7,11 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
-<!--body class="wizard-fullscreen">-->
-
+    <!--body class="wizard-fullscreen">-->
     <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CLOUDSFER AUTH OVERLAY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
     <div id="auth-overlay" class="auth-overlay">
         <div class="auth-card">
@@ -944,7 +943,7 @@
                     </p>
                 </div>
                 <!--<h1 class="np-title">Cloudsfer Automation</h1>
-    <p class="np-sub">Streamline your Autodesk BIM360 and ACC document exports.<br>Securely link your account to begin discovery.</p>-->
+                <p class="np-sub">Streamline your Autodesk BIM360 and ACC document exports.<br>Securely link your account to begin discovery.</p>-->
                 <div class="np-auth-card" id="np-auth-idle">
                     <div class="np-auth-icon"><svg viewBox="0 0 48 48" fill="none" width="48"><circle cx="24" cy="24" r="24" fill="#e8f0fe" /><path d="M24 13a6 6 0 016 6v3h1a2 2 0 012 2v9a2 2 0 01-2 2H17a2 2 0 01-2-2v-9a2 2 0 012-2h1v-3a6 6 0 016-6zm0 2a4 4 0 00-4 4v3h8v-3a4 4 0 00-4-4z" fill="#3b7de9" /></svg></div>
                     <h2 class="np-auth-h2">Autodesk Authorization</h2>
@@ -973,7 +972,7 @@
                     <p class="np-sub" style="margin-top: 0; margin-bottom: 0;">Choose the environment you want to export documents from.</p>
                 </div>
                 <!--<h1 class="np-title">Select Platform</h1>
-    <p class="np-sub">Choose the environment you want to export documents from.</p>-->
+                <p class="np-sub">Choose the environment you want to export documents from.</p>-->
                 <div class="np-plat-list">
                     <div class="np-plat-opt np-plat-sel" data-plat="both" onclick="npPickPlat('both')">
                         <div class="np-plat-icon np-both-icon"><svg viewBox="0 0 24 24" fill="none" width="22"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
@@ -1029,11 +1028,11 @@
                     <p class="np-sub" style="margin-top: 0; margin-bottom: 0;">Processing and reporting on selected data streams.</p>
                 </div>
                 <!--<h1 class="np-title">Exporting Documents</h1>
-    <p class="np-sub">Processing and reporting on selected data streams.</p>-->
+                <p class="np-sub">Processing and reporting on selected data streams.</p>-->
                 <div class="np-exp-grid">
-                    <div class="np-exp-card"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-processing" id="np-badge-fetch">PROCESSING</span></div><div class="np-exp-num" id="np-fetched">0/0</div><div class="np-exp-lbl">Reports fetched</div><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-fetch" style="width:0%"></div></div></div>
-                    <div class="np-exp-card" style="border-color:#e2e8f0"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge" style="background:#f1f5f9;color:#64748b">EXEMPT</span></div><div class="np-exp-num" id="np-nodm">0</div><div class="np-exp-lbl">Projects without data management</div><p style="font-size:12px;color:#94a3b8;font-style:italic">These projects contain no valid document logs.</p></div>
-                    <div class="np-exp-card" style="grid-column:1/-1"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-finalizing" id="np-badge-rep">FINALIZING</span></div><div class="np-exp-num" id="np-reports">0/0</div><div class="np-exp-lbl">Reports Generated</div><p style="font-size:12px;color:#94a3b8;font-style:italic" id="np-rep-note">Finalizing report formatting</p><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-rep" style="width:0%"></div></div></div>
+                    <div class="np-exp-card np-exp-accent"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-processing" id="np-badge-fetch">PROCESSING</span></div><div class="np-exp-num" id="np-fetched">0/0</div><div class="np-exp-lbl">Reports fetched</div><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-fetch" style="width:0%"></div></div></div>
+                    <div class="np-exp-card np-exp-accent"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge" style="background:#f1f5f9;color:#64748b">EXEMPT</span></div><div class="np-exp-num" id="np-nodm">0</div><div class="np-exp-lbl">Projects without data management</div><p style="font-size:12px;color:#94a3b8;font-style:italic">These projects contain no valid document logs.</p></div>
+                    <div class="np-exp-card np-exp-accent" style="grid-column:1/-1"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-finalizing" id="np-badge-rep">FINALIZING</span></div><div class="np-exp-num" id="np-reports">0/0</div><div class="np-exp-lbl">Reports Generated</div><p style="font-size:12px;color:#94a3b8;font-style:italic" id="np-rep-note">Finalizing report formatting</p><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-rep" style="width:0%"></div></div></div>
                 </div>
                 <div class="np-overall"><div class="np-overall-top"><span>● OVERALL PROGRESS: <span id="np-overall-lbl">PROCESSING</span></span><span id="np-overall-pct">0%</span></div><div class="np-overall-bar"><div class="np-overall-fill" id="np-overall-fill" style="width:0%"></div></div></div>
                 <div class="np-footer"><button class="np-btn-primary" id="np-btn-finalize" onclick="npGoStep(5)" disabled><svg viewBox="0 0 20 20" fill="currentColor" width="16"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" /></svg> Finalize Results</button></div>
@@ -1046,21 +1045,20 @@
                     <p class="np-sub" style="margin-bottom:0">Review synchronized data across your projects.</p>
                 </div>-->
                 <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; margin-bottom: 24px;">
-    <div style="width: 60px; height: 60px; border-radius: 50%; background: #dcfce7; border: 3px solid #86efac; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
-        <svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color: #166534;">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-        </svg>
-    </div>
-    <h1 class="np-title" style="margin-bottom: 8px;">Summary Report</h1>
-    <p class="np-sub" style="margin-bottom: 0;">Review synchronized data across your projects.</p>
-</div>
-                <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:4px">Total: <strong id="np-res-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here for pricing recommendation.</a></div><button class="np-btn-primary" style="padding:10px 20px">View Pricing Plans</button></div>
+                    <div style="width: 60px; height: 60px; border-radius: 50%; background: #dcfce7; border: 3px solid #86efac; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+                        <svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color: #166534;">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+                        </svg>
+                    </div>
+                    <h1 class="np-title" style="margin-bottom: 8px;">Summary Report</h1>
+                    <p class="np-sub" style="margin-bottom: 0;">Review synchronized data across your projects.</p>
+                </div>
+                <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:6px">Total synchronized data: <strong id="np-res-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here to get the recommendation pricing based on your usage.</a></div><button class="np-btn-primary" style="padding:10px 20px;flex-shrink:0">View Pricing Plans</button></div>
                 <div class="np-res-toolbar">
-                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
-                    <select id="np-res-filter" onchange="npRenderResults()" style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font:14px Inter,sans-serif;background:#fff;color:#1e293b;outline:none"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="14" style="color:#94a3b8;flex-shrink:0"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
+                    <div class="np-res-filter-wrap"><label>Filter by:</label><select id="np-res-filter" class="np-res-filter" onchange="npRenderResults()"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select></div>
                 </div>
                 <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
-                <div class="np-footer" style="justify-content:center"><button class="np-btn-ghost" onclick="npReset()">Start New Export</button></div>
             </div>
         </div>
     </div>
