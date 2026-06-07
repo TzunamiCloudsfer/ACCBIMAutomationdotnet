@@ -5,7 +5,7 @@
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const A = {
-  page:          'welcome',
+  page:          'newpage',
   platform:      null,          // 'acc' | 'bim360' | null
   _firstInit:    true,          // cleared after first SSE init event — used for page restore
   sessionValid:  false,
@@ -1916,7 +1916,7 @@ function _onAuthSuccess() {
   A.projects   = [];
   A.selectedIds.clear();
   connectSSE();
-  navigate('welcome');
+  navigate('newpage');
 }
 
 function showAuthTab(tab) {
@@ -2013,7 +2013,7 @@ async function logout() {
   if (sse) { sse.close(); sse = null; }
   A.activeUser = null;
   A.appUser    = null;
-  navigate('welcome');
+  navigate('newpage');
   _showAuthOverlay();
   showAuthTab('signin');
 }
@@ -2087,6 +2087,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
   });
+
+  // Apply initial page state so wizard-fullscreen class and stepper are set before checkAuth
+  navigate(A.page);
 
   // Check Cloudsfer app auth — starts SSE only if authenticated
   checkAuth();

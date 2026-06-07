@@ -7310,7 +7310,18 @@ body[data-platform="bim360"] .nav-item.active {
 }
 /* === NEW PAGE — 5-step wizard (np- prefix) === */
 #page-newpage {
-    background: #eef2f8;
+    background: #f8f9fb;
+}
+
+#page-newpage.active {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 .np-root {
@@ -7320,9 +7331,9 @@ body[data-platform="bim360"] .nav-item.active {
     align-items: center;
     padding: 36px 48px 72px;
     font-family: 'Inter',sans-serif;
-    max-width: 800px;
-    margin: 0 auto;
+    max-width: 860px;
     width: 100%;
+    margin: 0 auto;
     box-sizing: border-box;
 }
 
@@ -8077,27 +8088,13 @@ body.wizard-fullscreen {
         overflow: auto;
     }
 
-    body.wizard-fullscreen #page-newpage {
-        position: fixed;
-        inset: 0;
-        z-index: 200;
-        overflow-y: auto;
-        background: #eef2f8;
-        display: flex !important;
-        flex-direction: column;
-    }
-
     body.wizard-fullscreen #page-welcome {
         background: #fff;
     }
 
-    body.wizard-fullscreen #page-newpage {
-        background: #f8f9fb;
-    }
-
     body.wizard-fullscreen .np-root {
         width: 100%;
-        max-width: 900px;
+        max-width: 860px;
         margin: 0 auto;
         padding: 48px 60px 80px;
         align-items: center;
