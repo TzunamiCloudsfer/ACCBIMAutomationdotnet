@@ -8,6 +8,7 @@ using AutodeskAutomation.Models;
 using AutodeskAutomation.Models.Documents;
 using AutodeskAutomation.Playwright.Acc;
 using Microsoft.Playwright;
+using System.Linq;
 
 namespace AutodeskAutomation.Services
 {
@@ -114,7 +115,16 @@ namespace AutodeskAutomation.Services
                 }
             }
 
-            sse.Broadcast("export-start", new { total = toProcess.Count, skipped = results.Skipped, platform = "acc" });
+            sse.Broadcast("export-start", new {
+                total    = toProcess.Count,
+                skipped  = results.Skipped,
+                platform = "acc",
+                projects = projects.Select(p => new {
+                    id     = p.ProjectId,
+                    name   = p.Name,
+                    status = srv.Acc.ProjectStatuses.TryGetValue(p.ProjectId, out var ps) ? ps.Status : "pending"
+                }).ToList()
+            });
 
             srv.Acc.Progress.Total = toProcess.Count;
             srv.Acc.Progress.Completed = 0;

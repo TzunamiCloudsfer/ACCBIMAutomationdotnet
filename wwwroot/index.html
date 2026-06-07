@@ -588,8 +588,13 @@
 
       <div class="export-topbar">
         <div class="export-title-group">
-          <h2 id="export-title">Export in Progress</h2>
-          <p id="export-subtitle" class="text-muted">Processing projects one by one…</p>
+          <div class="export-title-row">
+            <div id="export-active-spinner" class="export-active-spinner hidden"></div>
+            <div>
+              <h2 id="export-title">Export in Progress</h2>
+              <p id="export-subtitle" class="text-muted">Processing projects one by one…</p>
+            </div>
+          </div>
         </div>
         <div class="export-topbar-right">
           <div id="export-run-controls" class="hidden">

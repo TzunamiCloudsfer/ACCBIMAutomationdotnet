@@ -55,7 +55,17 @@ namespace AutodeskAutomation.Services
                 Log($"Chrome executable: {launchOpts.ExecutablePath ?? "(Playwright default)"}");
                 var browser = await playwright.Chromium.LaunchAsync(launchOpts);
                 Log("Chrome launched. Creating context...");
-                var context = await browser.NewContextAsync(new BrowserNewContextOptions { ViewportSize = null });
+
+                // Load existing auth state so the browser opens pre-authenticated when cookies are still valid.
+                // If the session is expired the user simply sees the login page and logs in as normal.
+                var existingAuthPath = FindExistingAuthStatePath(srv.ActiveUser, srv.ActiveUserSlug);
+                var ctxOpts = !string.IsNullOrEmpty(existingAuthPath)
+                    ? new BrowserNewContextOptions { StorageStatePath = existingAuthPath, ViewportSize = null }
+                    : new BrowserNewContextOptions { ViewportSize = null };
+                if (!string.IsNullOrEmpty(existingAuthPath))
+                    Log($"Loading existing auth state: {existingAuthPath}");
+
+                var context = await browser.NewContextAsync(ctxOpts);
                 var page = await context.NewPageAsync();
                 Log("Browser ready -- navigating to acc.autodesk.com...");
 
@@ -77,6 +87,7 @@ namespace AutodeskAutomation.Services
                 await Task.Delay(8000);
 
                 bool loginDetected = false;
+                string? capturedBimAccountId = null;   // set when BIM360 admin URL is captured
                 for (int i = 0; i < 200 && !loginDetected; i++)
                 {
                     await Task.Delay(3000);
@@ -129,6 +140,17 @@ namespace AutodeskAutomation.Services
                                     !bimUrl.Contains("accounts.autodesk"))
                                 {
                                     Log("BIM360 admin authenticated!");
+
+                                    // Extract the account GUID directly from the URL.
+                                    // Pattern: admin.b360.autodesk.com/admin/{guid}/projects
+                                    var m = Regex.Match(bimUrl,
+                                        @"admin\.b360\.autodesk\.com/admin/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+                                        RegexOptions.IgnoreCase);
+                                    if (m.Success)
+                                    {
+                                        capturedBimAccountId = m.Groups[1].Value;
+                                        Log($"BIM360 account ID captured from URL: {capturedBimAccountId}");
+                                    }
                                     break;
                                 }
                             }
@@ -232,7 +254,25 @@ namespace AutodeskAutomation.Services
                     }
                 }
 
-                // Auto-detect Autodesk account IDs
+                // Save BIM360 admin URL from the browser URL captured during navigation.
+                // This is the most reliable source — it's the exact URL the user landed on.
+                // It supplements (and takes priority over) the Hubs API detection below.
+                if (!string.IsNullOrEmpty(capturedBimAccountId) && detectedEmail != null)
+                {
+                    var bimAdminUrl = $"https://admin.b360.autodesk.com/admin/{capturedBimAccountId}/projects";
+                    db.SetAdminUrl(detectedEmail, "bim360", bimAdminUrl);
+                    sse.Broadcast("account-detected", new
+                    {
+                        platform  = "bim360",
+                        accountId = capturedBimAccountId,
+                        hubName   = capturedBimAccountId,
+                        url       = bimAdminUrl
+                    });
+                    Log($"BIM360 admin URL saved: {bimAdminUrl}");
+                }
+
+                // Auto-detect Autodesk account IDs from the Hubs API (fills in ACC URL and
+                // any BIM360 hub not already captured from the browser URL above)
                 if (capturedAuth != null)
                 {
                     sse.Broadcast("login-status", new
@@ -276,6 +316,19 @@ namespace AutodeskAutomation.Services
             {
                 timer.Dispose();
             }
+        }
+
+        private static string FindExistingAuthStatePath(string? userEmail, string? userSlug)
+        {
+            var candidates = new[] { userSlug, !string.IsNullOrEmpty(userEmail) ? SlugHelper.EmailToSlug(userEmail) : null };
+            foreach (var slug in candidates)
+            {
+                if (string.IsNullOrEmpty(slug)) continue;
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    "storage", "users", slug, "auth-state.json");
+                if (File.Exists(path)) return path;
+            }
+            return string.Empty;
         }
 
         private async Task AutoDetectAccounts(string authHeader, string userEmail)

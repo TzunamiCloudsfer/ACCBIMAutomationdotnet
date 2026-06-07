@@ -255,8 +255,22 @@ function handleEvent(type, data) {
           A.logs = liveData.recentLogs;
           replayLogs(liveData.recentLogs);
         }
-        A.progress     = liveData?.progress     || { completed: 0, total: 0 };
-        A.results      = liveData?.results      || { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+        A.progress     = liveData?.progress || { completed: 0, total: 0 };
+        { const sr = liveData?.results;
+          A.results = sr
+            ? { success: sr.success || 0, failed: sr.failed || 0,
+                no_dm: sr.no_dm ?? sr.noDm ?? 0,
+                skipped: sr.skipped || 0, emailsQueued: sr.emailsQueued || 0 }
+            : { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+          // Sync NP wizard counters so the "Projects without data management" card updates on reconnect
+          const serverNoDm = A.results.no_dm;
+          if (serverNoDm > (NP.export.noDm || 0)) NP.export.noDm = serverNoDm;
+          NP.export.success   = A.results.success;
+          NP.export.completed = A.progress.completed;
+          NP.export.total     = A.progress.total || NP.export.total;
+          const noDmEl = document.getElementById('np-nodm');
+          if (noDmEl) noDmEl.textContent = String(NP.export.noDm);
+        }
         A.projStatuses = liveData?.projectStatuses || {};
         A.exportStatus = liveData?.exportStatus || 'idle';
       }
@@ -430,6 +444,7 @@ function handleEvent(type, data) {
       if (A.progress.total > 0)
         A.progress.completed = A.progress.total;
       syncChips(); syncProgress();
+      _syncExportSpinners();
       showExportComplete(A.results);
       updatePauseResumeUI();
       refreshPlatformStats();
@@ -601,6 +616,39 @@ function handleEvent(type, data) {
           updatePsiSummary(pid, data.totalFiles, data.totalSizeFormatted);
           // Update wizard NP project entry too
           npSyncFileSummary(pid, A.projStatuses[pid].files, A.projStatuses[pid].size);
+        }
+      }
+      break;
+
+    case 'account-detected':
+      // Server saved an admin URL for this platform after detecting the account from the Hubs API.
+      // Store it in local state, update any visible URL inputs, and start discovery automatically.
+      if (platform === 'acc') {
+        A.accAdminUrl = data.url;
+        // Fill the URL input on the projects page if visible and empty
+        const accInput = $('admin-url-input');
+        if (accInput && !accInput.value && A.platform === 'acc') accInput.value = data.url;
+      }
+      if (platform === 'bim360') {
+        A.bim360AdminUrl = data.url;
+        const bimInput = $('admin-url-input');
+        if (bimInput && !bimInput.value && A.platform === 'bim360') bimInput.value = data.url;
+      }
+      // Fill wizard URL input
+      const npInput = document.getElementById('np-url-input');
+      if (npInput && !npInput.value) npInput.value = data.url;
+      // Refresh platform stats so project counts update
+      refreshPlatformStats();
+      showToast(`${platform.toUpperCase()} account detected — "${data.hubName || data.accountId}". URL saved.`, 'success');
+      // Auto-start discovery for this platform if no projects are loaded yet
+      if (A.sessionValid && !A.exportRunning) {
+        const hasProjects = platform === 'acc'
+          ? (A.accStats.projectCount || 0) > 0
+          : (A.bim360Stats.projectCount || 0) > 0;
+        if (!hasProjects) {
+          setTimeout(function() {
+            api('/api/' + platform + '/projects/discover', 'POST').catch(function() {});
+          }, 800);
         }
       }
       break;
@@ -815,6 +863,46 @@ function finalizeLogin() {
   updateNavBadge('auth', '✓');
   showToast(`Signed in${A.activeUser ? ' as ' + A.activeUser : ''} successfully!`, 'success');
   refreshAuthUI();
+  // Load saved admin URLs and show them on the auth page
+  _loadAndShowSavedUrls();
+}
+
+async function _loadAndShowSavedUrls() {
+  try {
+    const s = await api('/api/status');
+    const accUrl = s.acc && s.acc.accountAdminUrl;
+    const bimUrl = s.bim360 && s.bim360.accountAdminUrl;
+
+    if (accUrl)  A.accAdminUrl    = accUrl;
+    if (bimUrl)  A.bim360AdminUrl = bimUrl;
+
+    // Show URLs on the auth success page so the user can confirm them
+    const urlDisplay = $('detected-urls-card');
+    if (urlDisplay) {
+      urlDisplay.innerHTML = '';
+      if (accUrl) {
+        urlDisplay.innerHTML += `<div class="detected-url-row">
+          <span class="detected-url-badge acc-badge">ACC</span>
+          <span class="detected-url-text" title="${esc(accUrl)}">${esc(accUrl)}</span>
+          <button class="btn btn-ghost btn-xs" onclick="copyToClipboard('${esc(accUrl)}')">Copy</button>
+        </div>`;
+      }
+      if (bimUrl) {
+        urlDisplay.innerHTML += `<div class="detected-url-row">
+          <span class="detected-url-badge bim-badge">BIM360</span>
+          <span class="detected-url-text" title="${esc(bimUrl)}">${esc(bimUrl)}</span>
+          <button class="btn btn-ghost btn-xs" onclick="copyToClipboard('${esc(bimUrl)}')">Copy</button>
+        </div>`;
+      }
+      if (accUrl || bimUrl) urlDisplay.classList.remove('hidden');
+    }
+  } catch { /* non-fatal */ }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard && navigator.clipboard.writeText(text)
+    .then(function() { showToast('URL copied.', 'success'); })
+    .catch(function() { showToast('Could not copy.', 'warning'); });
 }
 
 function onLoginFailed(msg) {
@@ -1308,6 +1396,21 @@ function syncChips() {
   setText('chip-failed',  r.failed  || 0);
   setText('chip-nodm',    r.no_dm || r.noDm || 0);
   setText('chip-skipped', r.skipped || 0);
+  _syncExportSpinners();
+}
+
+function _syncExportSpinners() {
+  const running = !!A.exportRunning;
+  // Title spinner
+  const sp = $('export-spinner');
+  if (sp) sp.classList.toggle('hidden', !running);
+  // LIVE badge on Projects panel
+  const lb = $('live-badge');
+  if (lb) lb.classList.toggle('hidden', !running);
+  // Pulsing border on stat chips
+  document.querySelectorAll('#export-stats-grid .stat-card').forEach(function(c) {
+    c.classList.toggle('stat-running', running);
+  });
 }
 
 function syncProgress() {
@@ -2168,33 +2271,54 @@ function npClearTimer(){if(NP.loginTimer){clearInterval(NP.loginTimer);NP.loginT
 
 // ── Wizard (NP) sync functions — called directly from handleEvent ─────────────
 function npSyncProgress(data) {
-  if (NP.step !== 4) return;
   var r = data.results || {};
   NP.export.completed = data.completed || 0;
   NP.export.total     = data.total     || NP.export.total;
   NP.export.success   = r.success || r.Success || 0;
-  NP.export.noDm      = r.no_dm   || r.noDm    || r.NoDm || 0;
-  if (typeof npUpdateExport === 'function') npUpdateExport();
+  // Use max of server count and local count so a fast-arriving progress-update
+  // doesn't overwrite a noDm we already counted from project-done
+  var serverNoDm = r.no_dm || r.noDm || r.NoDm || 0;
+  if (serverNoDm > (NP.export.noDm || 0)) {
+    NP.export.noDm = serverNoDm;
+    _npSetNoDm(NP.export.noDm);
+  }
+  if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
 }
 
 function npSyncProjectDone(data) {
-  if (NP.step !== 4) return;
   var status = data.status;
+
   NP.export.completed = (NP.export.completed || 0) + 1;
   if (status === 'success') NP.export.success = (NP.export.success || 0) + 1;
-  if (status === 'no_dm')   NP.export.noDm    = (NP.export.noDm    || 0) + 1;
+  if (status === 'no_dm') {
+    NP.export.noDm = (NP.export.noDm || 0) + 1;
+    console.log('[NP] no_dm project done, noDm count now:', NP.export.noDm);
+    _npSetNoDm(NP.export.noDm);
+  }
 
-  // Store files/size directly on the NP project entry
   var pid  = data.project && (data.project.id || data.project.name);
   var proj = pid && NP.projects.find(function(p) { return p.id === pid || p.name === pid; });
   if (proj) {
-    // Always overwrite — never fall back to stale values from a previous run
     proj.files  = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—';
     proj.size   = data.totalSizeFormatted || '—';
     proj.status = status;
   }
 
-  if (typeof npUpdateExport === 'function') npUpdateExport();
+  if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
+}
+
+// Dedicated helper — updates every element that shows the no_dm count
+function _npSetNoDm(count) {
+  var val = String(count || 0);
+  // querySelectorAll so duplicate IDs (if any) are all updated
+  document.querySelectorAll('#np-nodm').forEach(function(el) {
+    el.textContent = val;
+    console.log('[NP] set #np-nodm to', val, el);
+  });
+  // Also cover the badge on the EXEMPT card directly
+  document.querySelectorAll('[data-nodm-badge]').forEach(function(el) {
+    el.textContent = val;
+  });
 }
 
 function npSyncComplete() {
@@ -2310,7 +2434,7 @@ function npUpdateExport(){
   var fe=document.getElementById('np-fetched');if(fe)fe.textContent=c.completed+'/'+c.total;
   var ff=document.getElementById('np-fill-fetch');if(ff)ff.style.width=pct+'%';
   var bf=document.getElementById('np-badge-fetch');if(bf){bf.className='np-exp-badge '+(c.running?'np-processing':'np-done-badge');bf.textContent=c.running?'PROCESSING':'DONE';}
-  var ne=document.getElementById('np-nodm');if(ne)ne.textContent=String(c.noDm);
+  _npSetNoDm(c.noDm);
   var re=document.getElementById('np-reports');if(re)re.textContent=c.success+'/'+rmax;
   var rf=document.getElementById('np-fill-rep');if(rf)rf.style.width=rpct+'%';
   var br=document.getElementById('np-badge-rep');if(br){br.className='np-exp-badge '+(c.running?'np-finalizing':'np-done-badge');br.textContent=c.running?'FINALIZING':'DONE';}

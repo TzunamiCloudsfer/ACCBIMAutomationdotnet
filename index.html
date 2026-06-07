@@ -285,6 +285,8 @@
                             </div>
                             <button class="btn btn-ghost btn-sm" id="btn-relogin">Re-authenticate</button>
                         </div>
+                        <!-- Detected admin URLs -->
+                        <div id="detected-urls-card" class="detected-urls-card hidden"></div>
                     </div>
                 </div>
 
@@ -539,7 +541,10 @@
 
                 <div class="export-topbar">
                     <div class="export-title-group">
-                        <h2 id="export-title">Export in Progress</h2>
+                        <div class="export-title-row">
+                            <span class="export-spinner hidden" id="export-spinner"><span class="exp-spin-ring"></span></span>
+                            <h2 id="export-title">Export in Progress</h2>
+                        </div>
                         <p id="export-subtitle" class="text-muted">Processing projects one by oneâ€¦</p>
                     </div>
                     <div class="export-topbar-right">
@@ -660,7 +665,12 @@
 
                     <div class="export-panel" id="panel-projects">
                         <div class="panel-header">
-                            <span>Projects</span>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span>Projects</span>
+                                <span class="live-badge hidden" id="live-badge">
+                                    <span class="live-dot"></span>LIVE
+                                </span>
+                            </div>
                             <div style="display:flex;align-items:center;gap:8px">
                                 <span class="panel-count" id="proj-panel-count"></span>
                                 <button class="btn btn-ghost btn-xs" id="btn-show-log" onclick="toggleLogPanel()">
@@ -984,7 +994,7 @@
                 <p class="np-sub">Processing and reporting on selected data streams.</p>-->
                 <div class="np-exp-grid">
                     <div class="np-exp-card np-exp-accent"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-processing" id="np-badge-fetch">PROCESSING</span></div><div class="np-exp-num" id="np-fetched">0/0</div><div class="np-exp-lbl">Reports fetched</div><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-fetch" style="width:0%"></div></div></div>
-                    <div class="np-exp-card np-exp-accent"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge" style="background:#f1f5f9;color:#64748b">EXEMPT</span></div><div class="np-exp-num" id="np-nodm">0</div><div class="np-exp-lbl">Projects without data management</div><p style="font-size:12px;color:#94a3b8;font-style:italic">These projects contain no valid document logs.</p></div>
+                    <div class="np-exp-card np-exp-accent"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge" style="background:#f1f5f9;color:#64748b">EXEMPT</span></div><div class="np-exp-num" id="np-nodm" data-nodm-badge>0</div><div class="np-exp-lbl">Projects without data management</div><p style="font-size:12px;color:#94a3b8;font-style:italic">These Projects does not have data Management</p></div>
                     <div class="np-exp-card np-exp-accent" style="grid-column:1/-1"><div class="np-exp-top"><svg viewBox="0 0 24 24" fill="none" width="20"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg><span class="np-exp-badge np-finalizing" id="np-badge-rep">FINALIZING</span></div><div class="np-exp-num" id="np-reports">0/0</div><div class="np-exp-lbl">Reports Generated</div><p style="font-size:12px;color:#94a3b8;font-style:italic" id="np-rep-note">Finalizing report formatting</p><div class="np-exp-bar"><div class="np-exp-fill" id="np-fill-rep" style="width:0%"></div></div></div>
                 </div>
                 <div class="np-overall"><div class="np-overall-top"><span>● OVERALL PROGRESS: <span id="np-overall-lbl">PROCESSING</span></span><span id="np-overall-pct">0%</span></div><div class="np-overall-bar"><div class="np-overall-fill" id="np-overall-fill" style="width:0%"></div></div></div>
@@ -1017,7 +1027,7 @@
     </div>
     <!-- ════════════════════════════════════════════════════════ -->
 
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=24"></script>
 </body>
 </html>
 

@@ -304,6 +304,12 @@ function handleEvent(type, data) {
         A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
         A.projStatuses = {};
+        // Pre-populate all projects so the full list shows immediately
+        if (Array.isArray(data.projects) && data.projects.length) {
+          data.projects.forEach(p => {
+            A.projStatuses[p.id || p.name] = { status: p.status || 'pending', name: p.name };
+          });
+        }
         if (A.page !== 'export') navigate('export');
         navBadgeExport(true);
         syncChips(); syncProgress();
@@ -1121,6 +1127,20 @@ function updatePauseResumeUI() {
   } else {
     ctrls.classList.add('hidden');
   }
+  syncExportSpinner();
+}
+
+function syncExportSpinner() {
+  const el = $('export-active-spinner');
+  if (!el) return;
+  const platformRunning = A.exportRunning && (A.chainRunning || A.runningPlatform === A.platform);
+  if (platformRunning) {
+    el.classList.remove('hidden');
+    el.classList.toggle('spinner-paused', !!A.exportPaused);
+  } else {
+    el.classList.add('hidden');
+    el.classList.remove('spinner-paused');
+  }
 }
 
 function toggleLogPanel() {
@@ -1145,6 +1165,7 @@ function syncExportPage() {
   syncChips(); syncProgress();
   if (A.exportStatus === 'complete') showExportComplete(A.results);
   updatePauseResumeUI();
+  syncExportSpinner();
   if (A.exportPaused) showEl('pause-banner', true);
 }
 
