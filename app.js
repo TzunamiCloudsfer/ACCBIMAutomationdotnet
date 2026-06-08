@@ -2412,6 +2412,7 @@ function npUpdateSel(){
 }
 async function npStartExport(){
   if(!NP.selectedIds.size){if(typeof showToast!=='undefined')showToast('Select at least one project.','warning');return;}
+  NP._startingExport=true;
   npGoStep(4);
   var ids=Array.from(NP.selectedIds);
   var accIds=NP.projects.filter(function(p){return p.platform!=='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
@@ -2423,10 +2424,14 @@ async function npStartExport(){
   }catch(e){if(typeof showToast!=='undefined')showToast('Export start failed: '+e.message,'error');}
 }
 function npOnEnterExport(){
-  NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0};
-  // Clear stale file data from previous run so results table shows fresh values
-  NP.projects.forEach(function(p){ delete p.files; delete p.size; delete p.status; });
-  var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;npUpdateExport();
+  if(NP._startingExport){
+    NP._startingExport=false;
+    NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0};
+    // Clear stale file data from previous run so results table shows fresh values
+    NP.projects.forEach(function(p){ delete p.files; delete p.size; delete p.status; });
+    var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;
+  }
+  npUpdateExport();
 }
 function npUpdateExport(){
   var c=NP.export,pct=c.total>0?Math.min(100,Math.round(c.completed/c.total*100)):0;
