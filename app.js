@@ -267,7 +267,7 @@ function handleEvent(type, data) {
           if (serverNoDm > (NP.export.noDm || 0)) NP.export.noDm = serverNoDm;
           NP.export.success   = A.results.success;
           NP.export.completed = A.progress.completed;
-          NP.export.total     = A.progress.total || NP.export.total;
+          NP.export.total     = Math.max(NP.export.total || 0, A.progress.total || 0);
           const noDmEl = document.getElementById('np-nodm');
           if (noDmEl) noDmEl.textContent = String(NP.export.noDm);
         }
@@ -330,13 +330,14 @@ function handleEvent(type, data) {
       if (platform) { A.runningPlatform = platform; A.platform = platform; }
       {
         A.exportStatus = 'running'; A.exportPaused = false;
-        A.progress  = { completed: 0, total: data.total };
-        A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
 
         // In a chain run OR a wizard multi-platform run, the second export-start must
-        // NOT wipe results already collected by the first phase.
-        if (!A.chainRunning && !(typeof NP !== 'undefined' && NP._multiPlatform)) {
+        // NOT wipe results/statuses already collected by the first phase.
+        var _isMulti = A.chainRunning || (typeof NP !== 'undefined' && NP._multiPlatform);
+        if (!_isMulti) {
+          A.progress  = { completed: 0, total: data.total };
+          A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
           A.projStatuses = {};
         }
 
@@ -404,13 +405,27 @@ function handleEvent(type, data) {
     case 'progress-update':
       A.progress = { completed: data.completed, total: data.total };
       if (data.results) {
-        A.results = {
-          success:      data.results.success      || 0,
-          failed:       data.results.failed       || 0,
-          no_dm:        data.results.no_dm  || data.results.noDm  || 0,
-          skipped:      data.results.skipped      || 0,
-          emailsQueued: data.results.emailsQueued || 0,
-        };
+        var _multi2 = A.chainRunning || (typeof NP !== 'undefined' && NP._multiPlatform);
+        if (_multi2) {
+          // Multi-platform: each progress-update only carries one platform's running totals.
+          // Use Math.max so accumulated counts from the other platform are never lost.
+          var _pr = A.results;
+          A.results = {
+            success:      Math.max(_pr.success      || 0, data.results.success      || 0),
+            failed:       Math.max(_pr.failed       || 0, data.results.failed       || 0),
+            no_dm:        Math.max(_pr.no_dm        || 0, data.results.no_dm || data.results.noDm || 0),
+            skipped:      Math.max(_pr.skipped      || 0, data.results.skipped      || 0),
+            emailsQueued: Math.max(_pr.emailsQueued || 0, data.results.emailsQueued || 0),
+          };
+        } else {
+          A.results = {
+            success:      data.results.success      || 0,
+            failed:       data.results.failed       || 0,
+            no_dm:        data.results.no_dm  || data.results.noDm  || 0,
+            skipped:      data.results.skipped      || 0,
+            emailsQueued: data.results.emailsQueued || 0,
+          };
+        }
       }
       syncChips(); syncProgress();
       npSyncProgress(data);
@@ -2287,15 +2302,22 @@ function npClearTimer(){if(NP.loginTimer){clearInterval(NP.loginTimer);NP.loginT
 // ── Wizard (NP) sync functions — called directly from handleEvent ─────────────
 function npSyncProgress(data) {
   var r = data.results || {};
-  NP.export.completed = data.completed || 0;
-  NP.export.total     = data.total     || NP.export.total;
-  NP.export.success   = r.success || r.Success || 0;
-  // Use max of server count and local count so a fast-arriving progress-update
-  // doesn't overwrite a noDm we already counted from project-done
-  var serverNoDm = r.no_dm || r.noDm || r.NoDm || 0;
-  if (serverNoDm > (NP.export.noDm || 0)) {
-    NP.export.noDm = serverNoDm;
-    _npSetNoDm(NP.export.noDm);
+  // Always take the LARGER of current total and platform batch total.
+  // Prevents a per-platform progress-update from shrinking the multi-platform total
+  // that npOnEnterExport set from NP.selectedIds.size (keeps 4, ignores per-platform 2).
+  NP.export.total = Math.max(NP.export.total || 0, data.total || 0);
+
+  // In multi-platform runs each progress-update only carries ONE platform's counters.
+  // npSyncProjectDone already tracks completed/success/noDm cumulatively, so
+  // overwriting here would reset the cross-platform totals to a single platform's values.
+  if (!NP._multiPlatform) {
+    NP.export.completed = data.completed || 0;
+    NP.export.success   = r.success || r.Success || 0;
+    var serverNoDm = r.no_dm || r.noDm || r.NoDm || 0;
+    if (serverNoDm > (NP.export.noDm || 0)) {
+      NP.export.noDm = serverNoDm;
+      _npSetNoDm(NP.export.noDm);
+    }
   }
   if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
 }

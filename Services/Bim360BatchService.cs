@@ -522,10 +522,11 @@ namespace AutodeskAutomation.Services
                             foreach (var cellText in allCells)
                             {
                                 var dtStr = cellText.Trim();
-                                // Skip empty or very short values — real dates are "Jun 4, 2026 11:07 AM" etc.
+                                // Skip short strings — valid dates are at least "1/1/26" (6 chars)
                                 if (dtStr.Length < 6) continue;
-                                // Require the cell to contain at least one letter (month name)
-                                if (!dtStr.Any(char.IsLetter)) continue;
+                                // DateTime.TryParse already rejects numeric-only file counts/sizes,
+                                // so no letter check needed — that was filtering out numeric date
+                                // formats like "06/04/2026 11:07" used by BIM360 reports.
                                 if (DateTime.TryParse(dtStr, out DateTime rowDt))
                                 {
                                     // Compare using local machine time (Reports page shows local time)
@@ -592,7 +593,7 @@ namespace AutodeskAutomation.Services
                             foreach (var cell in row0Cells)
                             {
                                 var dtStr = cell.Trim();
-                                if (dtStr.Length >= 6 && dtStr.Any(char.IsLetter) &&
+                                if (dtStr.Length >= 6 &&
                                     DateTime.TryParse(dtStr, out DateTime row0Dt))
                                 {
                                     // Accept if the report was run within the last 10 minutes (wide window for timezone offset)
