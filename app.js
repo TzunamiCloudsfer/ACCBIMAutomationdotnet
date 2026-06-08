@@ -2449,6 +2449,9 @@ function npSetOverall(pct,label){
   var of=document.getElementById('np-overall-fill');if(of)of.style.width=pct+'%';
   var ol=document.getElementById('np-overall-lbl');if(ol)ol.textContent=label;
   var op=document.getElementById('np-overall-pct');if(op)op.textContent=pct+'%';
+  var active=label!=='COMPLETE';
+  var bar=document.getElementById('np-overall-bar-wrap');if(bar)bar.classList.toggle('np-bar-active',active);
+  var dot=document.getElementById('np-overall-dot');if(dot)dot.classList.toggle('np-dot-hidden',!active);
 }
 function npOnEnterResults(){
   var s=NP.export.success,el=document.getElementById('np-res-total');
