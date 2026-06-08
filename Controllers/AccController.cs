@@ -55,7 +55,7 @@ namespace AutodeskAutomation.Controllers
                         .FetchAccProjects(adminUrl, authPath);
 
                     var active = projects.Where(p =>
-                        !string.Equals(p.Status, "inactive", StringComparison.OrdinalIgnoreCase)).ToList();
+                        string.Equals(p.Status, "active", StringComparison.OrdinalIgnoreCase)).ToList();
                     _db.SaveProjectDocuments(_srv.ActiveUser, "acc", active);
 
                     // Auto-set admin URL if not already set
