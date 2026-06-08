@@ -7,6 +7,7 @@ using AutodeskAutomation.Helpers;
 using AutodeskAutomation.Models;
 using AutodeskAutomation.Models.Documents;
 using AutodeskAutomation.Playwright.Acc;
+using AutodeskAutomation.Playwright.Bim360;
 using Microsoft.Playwright;
 using System.Linq;
 
@@ -191,6 +192,34 @@ namespace AutodeskAutomation.Services
                     await browser.CloseAsync();
                 }
 
+                // After browser closes, open a fresh browser to download and parse the Excel report
+                if (result.Status == "success" && !string.IsNullOrEmpty(result.ReportsUrl))
+                {
+                    try
+                    {
+                        using var rptPlaywright = await Microsoft.Playwright.Playwright.CreateAsync();
+                        var rptBrowser = await rptPlaywright.Chromium.LaunchAsync(BrowserHelper.HeadlessOptions());
+                        try
+                        {
+                            var authPath = opts.AuthStatePath ?? GetDefaultAuthPath(opts.UserEmail);
+                            var rptCtx = !string.IsNullOrEmpty(authPath) && File.Exists(authPath)
+                                ? await rptBrowser.NewContextAsync(new BrowserNewContextOptions { StorageStatePath = authPath })
+                                : await rptBrowser.NewContextAsync();
+                            var rptPage = await rptCtx.NewPageAsync();
+                            var summary = await Bim360BatchService.NavigateToReportsAndCapture(
+                                rptPage, project, result.ReportsUrl, opts.UserEmail, result.ExportTriggeredAt, "acc");
+                            result.TotalFiles = summary.TotalFiles;
+                            result.TotalSizeBytes = summary.TotalSizeBytes;
+                            result.TotalSizeFormatted = summary.TotalSizeFormatted;
+                        }
+                        finally { await rptBrowser.CloseAsync(); }
+                    }
+                    catch (Exception rptEx)
+                    {
+                        Console.WriteLine($"[acc-reports] Report capture failed: {rptEx.Message}");
+                    }
+                }
+
                 if (result.Status == "success")
                 {
                     db.MarkCompleted(opts.UserEmail, "acc", project);
@@ -216,7 +245,10 @@ namespace AutodeskAutomation.Services
                 srv.Acc.Results.Skipped      = results.Skipped;
                 srv.Acc.Results.EmailsQueued = results.EmailsQueued;
                 sse.Broadcast("project-done", new { project = new { id = project.ProjectId, name = project.Name },
-                    status = result.Status, error = result.Error, platform = "acc" });
+                    status = result.Status, error = result.Error,
+                    totalFiles = result.TotalFiles,
+                    totalSizeFormatted = result.TotalSizeFormatted,
+                    platform = "acc" });
                 sse.Broadcast("progress-update", new { completed = i + 1, total = toProcess.Count,
                     results = new { results.Success, results.Failed, no_dm = results.NoDm,
                         results.Skipped, results.EmailsQueued }, platform = "acc" });
@@ -250,10 +282,15 @@ namespace AutodeskAutomation.Services
                     return new ExportResult { Status = "no_dm", Duration = (DateTime.UtcNow - start).TotalMilliseconds };
 
                 await filesPage.OpenProjectFiles();
-                await dialog.TriggerFilesLogExport();
+                var exportTriggeredAt = DateTime.Now.AddMinutes(-1);
+                var triggered = await dialog.TriggerFilesLogExport();
 
+                // Only set ReportsUrl if the export was actually triggered.
+                // If "Files log" wasn't found, skip report capture to avoid a 5-minute wait.
                 return new ExportResult { Status = "success",
-                    Duration = (DateTime.UtcNow - start).TotalMilliseconds, EmailsQueued = 1 };
+                    Duration = (DateTime.UtcNow - start).TotalMilliseconds, EmailsQueued = 1,
+                    ReportsUrl = triggered ? $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}" : null,
+                    ExportTriggeredAt = exportTriggeredAt };
             }
             catch (Exception ex)
             {

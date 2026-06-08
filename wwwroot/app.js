@@ -303,11 +303,16 @@ function handleEvent(type, data) {
         A.progress  = { completed: 0, total: data.total };
         A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
-        A.projStatuses = {};
-        // Pre-populate all projects so the full list shows immediately
+        // For chain runs, keep file count/size already captured from a previous phase.
+        // For standalone runs, start fresh.
+        if (!A.chainRunning) A.projStatuses = {};
+        // Pre-populate all projects so the full list shows immediately,
+        // merging so any existing files/size/sizeBytes are preserved.
         if (Array.isArray(data.projects) && data.projects.length) {
           data.projects.forEach(p => {
-            A.projStatuses[p.id || p.name] = { status: p.status || 'pending', name: p.name };
+            const key = p.id || p.name;
+            const existing = A.projStatuses[key] || {};
+            A.projStatuses[key] = { ...existing, status: p.status || 'pending', name: p.name };
           });
         }
         if (A.page !== 'export') navigate('export');
@@ -332,8 +337,25 @@ function handleEvent(type, data) {
     case 'project-done':
       if (isCurrentPlatform) {
         const id2 = data.project.id || data.project.name;
-        A.projStatuses[id2] = { status: data.status, name: data.project.name, error: data.error };
+        const prev2 = A.projStatuses[id2] || {};
+        A.projStatuses[id2] = { status: data.status, name: data.project.name, error: data.error,
+          files:     data.totalFiles         || prev2.files     || 0,
+          size:      data.totalSizeFormatted || prev2.size      || '',
+          sizeBytes: prev2.sizeBytes         || 0 };
         upsertPSI(id2, data.status, data.project.name, data.error);
+      }
+      break;
+
+    case 'files-log-summary':
+      { const pid = data.projectId;
+        if (pid) {
+          const prev = A.projStatuses[pid] || {};
+          A.projStatuses[pid] = { ...prev,
+            files:     data.totalFiles         || prev.files     || 0,
+            size:      data.totalSizeFormatted || prev.size      || '',
+            sizeBytes: data.totalSizeBytes     || prev.sizeBytes || 0 };
+          if (prev.status) upsertPSI(pid, A.projStatuses[pid].status, A.projStatuses[pid].name, A.projStatuses[pid].error);
+        }
       }
       break;
 
@@ -478,7 +500,8 @@ function handleEvent(type, data) {
       A.platform = data.phase;
       document.body.dataset.platform = data.phase;
       try { sessionStorage.setItem('ui_platform', data.phase); } catch {}
-      A.projStatuses = {};
+      // Keep A.projStatuses — it holds file count/size from the previous phase.
+      // The DOM list is cleared below so only the new phase's projects appear live.
       A.logs = [];
       A.progress = { completed: 0, total: 0 };
       A.results  = { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
@@ -1213,9 +1236,22 @@ function upsertPSI(id, status, name, error) {
     no_dm:     '⊘ No DM',
     skipped:   '↷ Skipped',
   }[status] || status;
+  const info = A.projStatuses[id] || {};
+  const filesStr = (info.files > 0) ? info.files.toLocaleString() : '—';
+  const sizeStr  = info.size  || '—';
   el.innerHTML = `
     <td class="psi-name-cell" title="${esc(name)}">${esc(name)}</td>
-    <td class="psi-status-cell"><span class="badge ${badgeClass}">${badgeLabel}</span></td>`;
+    <td class="psi-status-cell"><span class="badge ${badgeClass}">${badgeLabel}</span></td>
+    <td class="psi-files-cell">${filesStr}</td>
+    <td class="psi-size-cell">${esc(sizeStr)}</td>`;
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '—';
+  if (bytes < 1024)             return bytes + ' B';
+  if (bytes < 1024 * 1024)      return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
 }
 
 function showExportComplete(results) {
@@ -1241,6 +1277,16 @@ function showExportComplete(results) {
   setText('cs-failed',  failed);
   setText('cs-emails',  results.emailsQueued || 0);
   setText('cs-skipped', results.skipped || 0);
+
+  // Aggregate file count and size across all exported projects
+  let aggFiles = 0, aggBytes = 0;
+  Object.values(A.projStatuses).forEach(info => {
+    aggFiles += (info.files || 0);
+    aggBytes += (info.sizeBytes || 0);
+  });
+  setText('cs-files', aggFiles > 0 ? aggFiles.toLocaleString() : '—');
+  setText('cs-size',  aggBytes > 0 ? formatBytes(aggBytes) : '—');
+
   card.classList.remove('hidden');
   showNoDmRetrySection();
 }

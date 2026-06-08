@@ -13,7 +13,7 @@ namespace AutodeskAutomation.Playwright.Acc
 
         public async Task<string?> NavigateToProject(ProjectDocument project)
         {
-            var url = $"https://acc.autodesk.com/build/projects/{project.ProjectId}";
+            var url = $"https://acc.autodesk.com/docs/files/projects/{project.ProjectId}";
             await _page.GotoAsync(url, new PageGotoOptions
                 { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 60_000 });
             await Task.Delay(2000);
@@ -23,7 +23,7 @@ namespace AutodeskAutomation.Playwright.Acc
                 throw new Exception("Autodesk session expired --  please re-authenticate.");
 
             // If redirected away from the project page it's likely no_dm
-            if (!currentUrl.Contains("acc.autodesk.com"))
+            if (!currentUrl.Contains("/docs/files/"))
                 return null;
 
             return project.Name;

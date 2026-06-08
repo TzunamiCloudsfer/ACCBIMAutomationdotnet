@@ -416,9 +416,9 @@ namespace AutodeskAutomation.Services
         }   // end RunBatchInternal
 
         // After export: navigate to Reports page, capture report rows + screenshots
-        private static async Task<(int TotalFiles, long TotalSizeBytes, string TotalSizeFormatted)> NavigateToReportsAndCapture(
+        internal static async Task<(int TotalFiles, long TotalSizeBytes, string TotalSizeFormatted)> NavigateToReportsAndCapture(
             IPage page, ProjectDocument project, string reportsUrl, string? userEmail,
-            DateTime exportTriggeredAt = default)
+            DateTime exportTriggeredAt = default, string platform = "bim360")
         {
             if (exportTriggeredAt == default) exportTriggeredAt = DateTime.Now.AddMinutes(-5);
             var sse = SseService.Instance;
@@ -427,20 +427,36 @@ namespace AutodeskAutomation.Services
             try
             {
                 sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                    message = $"[{project.Name}] Navigating to Reports page...",
-                    platform = "bim360" });
+                    message = $"[{project.Name}] Navigating to Reports page: {reportsUrl}",
+                    platform });
 
                 await page.GotoAsync(reportsUrl, new PageGotoOptions
                     { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 30_000 });
                 await Task.Delay(3000);  // give React SPA time to render
-                Console.WriteLine($"[reports] URL: {page.Url}");
+
+                var landedUrl = page.Url;
+                Console.WriteLine($"[reports] URL: {landedUrl}");
+
+                // Detect authentication redirect
+                if (landedUrl.Contains("identity.autodesk") || landedUrl.Contains("accounts.autodesk") ||
+                    landedUrl.Contains("login") || landedUrl.Contains("signin"))
+                {
+                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                        message = $"[{project.Name}] Reports page redirected to auth -- session may have expired. URL: {landedUrl}",
+                        platform });
+                    return (0, 0L, "");
+                }
+
+                sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                    message = $"[{project.Name}] Reports page loaded -- URL: {landedUrl}",
+                    platform });
 
                 // Wait for the report list table to load
                 // data-testid="report-list-table"
                 var table = page.Locator("[data-testid=\"report-list-table\"]");
-                // Wait up to 30s for the React SPA to render the reports table
+                // Wait up to 60s for the React SPA to render the reports table
                 bool tableFound = false;
-                for (int t = 0; t < 10; t++)  // 10 x 3s = 30s
+                for (int t = 0; t < 12; t++)  // 12 x 5s = 60s
                 {
                     if (await table.CountAsync() > 0) { tableFound = true; break; }
                     await Task.Delay(5000);
@@ -457,53 +473,82 @@ namespace AutodeskAutomation.Services
 
                 if (!tableFound)
                 {
+                    // Log the full page HTML excerpt to diagnose the missing table
+                    var bodyText = await page.EvaluateAsync<string>("document.body ? document.body.innerText.substring(0, 400) : 'no body'");
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
-                        message = $"[{project.Name}] Reports table not found after 35s -- URL: {page.Url}",
-                        platform = "bim360" });
+                        message = $"[{project.Name}] Reports table not found after 65s -- URL: {page.Url} | Page: {bodyText?.Replace("\n", " ")?.Substring(0, Math.Min(200, bodyText?.Length ?? 0))}",
+                        platform });
                     return (0, 0L, "");
                 }
 
                 // Poll for a report row whose "Run at" datetime is AFTER exportTriggeredAt.
                 // The Reports table shows "Run at" in column 3 (index 2), newest first.
-                // Autodesk generates reports asynchronously -- can take up to 3 minutes.
+                // Autodesk generates reports asynchronously -- can take up to 5 minutes.
                 sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                    message = $"[{project.Name}] Waiting for report created after {exportTriggeredAt:HH:mm:ss} (local time)...",
-                    platform = "bim360" });
+                    message = $"[{project.Name}] Reports table found. Waiting for report created after {exportTriggeredAt:HH:mm:ss} (local time)...",
+                    platform });
 
                 int targetRowIndex = -1;
-                int maxWaitSec = 180;
+                int maxWaitSec = 300;  // increased from 180s to 300s
                 for (int w = 0; w < maxWaitSec / 10; w++)
                 {
-                    // Extract "Run at" datetime from each row using JavaScript
-                    var rowDatetimes = await page.EvaluateAsync<string[]>(
+                    // Extract all cell text per row so we can log the full row and scan for a date
+                    var rowCellData = await page.EvaluateAsync<string[]>(
                         "(function() {" +
                         "  var rows = document.querySelectorAll('[data-testid^=\"report-list-table-row-\"]');" +
                         "  return Array.from(rows).map(function(row) {" +
                         "    var cells = row.querySelectorAll('td');" +
-                        "    return cells.length >= 3 ? (cells[2].innerText || '') : '';" +
+                        "    return Array.from(cells).map(function(c){return(c.innerText||'').trim();}).join('||');" +
                         "  });" +
                         "})()");
 
-                    if (rowDatetimes != null && rowDatetimes.Length > 0)
+                    if (rowCellData != null && rowCellData.Length > 0)
                     {
-                        for (int ri = 0; ri < rowDatetimes.Length; ri++)
+                        // On first poll (w==0) or every reload, log what rows we see
+                        if (w == 0 || (w > 0 && w % 3 == 0))
                         {
-                            // Parse "Jun 4, 2026 11:07 AM" or similar
-                            var dtStr = rowDatetimes[ri].Trim();
-                            if (DateTime.TryParse(dtStr, out DateTime rowDt))
+                            var preview = string.Join(" | ", rowCellData.Take(3).Select((d, i) => $"row{i}:[{d}]"));
+                            sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                                message = $"[{project.Name}] Report rows ({rowCellData.Length}): {preview}",
+                                platform });
+                        }
+
+                        for (int ri = 0; ri < rowCellData.Length; ri++)
+                        {
+                            var allCells = rowCellData[ri].Split(new[] { "||" }, StringSplitOptions.None);
+                            bool rowMatched = false;
+                            // Scan cells for a datetime string — require month name to avoid
+                            // false matches on plain numbers (file counts, sizes, etc.)
+                            foreach (var cellText in allCells)
                             {
-                                // Compare using local machine time (Reports page shows local time)
-                                if (rowDt >= exportTriggeredAt.AddSeconds(-30))
+                                var dtStr = cellText.Trim();
+                                // Skip empty or very short values — real dates are "Jun 4, 2026 11:07 AM" etc.
+                                if (dtStr.Length < 6) continue;
+                                // Require the cell to contain at least one letter (month name)
+                                if (!dtStr.Any(char.IsLetter)) continue;
+                                if (DateTime.TryParse(dtStr, out DateTime rowDt))
                                 {
-                                    targetRowIndex = ri;
-                                    sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                                        message = $"[{project.Name}] Found report row {ri} with datetime: {dtStr}",
-                                        platform = "bim360" });
-                                    break;
+                                    // Compare using local machine time (Reports page shows local time)
+                                    if (rowDt >= exportTriggeredAt.AddSeconds(-30))
+                                    {
+                                        targetRowIndex = ri;
+                                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                                            message = $"[{project.Name}] Found report row {ri} with datetime: {dtStr}",
+                                            platform });
+                                        rowMatched = true;
+                                        break;
+                                    }
                                 }
                             }
+                            if (rowMatched) break;
                         }
                         if (targetRowIndex >= 0) break;
+                    }
+                    else if (w == 0)
+                    {
+                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                            message = $"[{project.Name}] Report table found but no rows yet -- waiting...",
+                            platform });
                     }
 
                     // Refresh every 30s
@@ -511,7 +556,7 @@ namespace AutodeskAutomation.Services
                     {
                         sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
                             message = $"[{project.Name}] Waiting for report... ({w * 10}s elapsed)",
-                            platform = "bim360" });
+                            platform });
                         await page.ReloadAsync(new PageReloadOptions
                             { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 15_000 });
                         await Task.Delay(4000);
@@ -524,18 +569,60 @@ namespace AutodeskAutomation.Services
 
                 if (targetRowIndex < 0)
                 {
-                    sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
-                        message = $"[{project.Name}] No new report found after {maxWaitSec}s",
-                        platform = "bim360" });
-                    return (0, 0L, "");
+                    // Final diagnostic: show what rows and dates exist on the page
+                    string rowSummary = "(none)";
+                    try
+                    {
+                        var finalRows = await page.EvaluateAsync<string[]>(
+                            "(function() {" +
+                            "  var rows = document.querySelectorAll('[data-testid^=\"report-list-table-row-\"]');" +
+                            "  return Array.from(rows).map(function(row) {" +
+                            "    var cells = row.querySelectorAll('td');" +
+                            "    return Array.from(cells).map(function(c){return c.innerText||'';}).join(' | ');" +
+                            "  });" +
+                            "})()");
+                        if (finalRows != null && finalRows.Length > 0)
+                        {
+                            rowSummary = string.Join("; ", finalRows.Take(5));
+
+                            // Fallback: if the table has rows but no date matched our criteria,
+                            // try using row 0 (most recent) if it has any parseable date in the last 10 minutes.
+                            // This handles cases where the report page shows UTC time but the server is in a different timezone.
+                            var row0Cells = finalRows[0].Split(new[] { " | " }, StringSplitOptions.None);
+                            foreach (var cell in row0Cells)
+                            {
+                                var dtStr = cell.Trim();
+                                if (dtStr.Length >= 6 && dtStr.Any(char.IsLetter) &&
+                                    DateTime.TryParse(dtStr, out DateTime row0Dt))
+                                {
+                                    // Accept if the report was run within the last 10 minutes (wide window for timezone offset)
+                                    var diffMinutes = Math.Abs((DateTime.Now - row0Dt).TotalMinutes);
+                                    if (diffMinutes <= 10)
+                                    {
+                                        targetRowIndex = 0;
+                                        sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
+                                            message = $"[{project.Name}] Using fallback row 0 (within 10 min): {dtStr}",
+                                            platform });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    if (targetRowIndex < 0)
+                    {
+                        sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
+                            message = $"[{project.Name}] No new report after {maxWaitSec}s. Looking for date >= {exportTriggeredAt:HH:mm:ss}. Rows: {rowSummary}",
+                            platform });
+                        return (0, 0L, "");
+                    }
                 }
 
-                // Use the specific row by index
-                var firstRow = page.Locator($"[data-testid=\"report-list-table-row-{targetRowIndex}\"]");
-
                 sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                    message = $"[{project.Name}] Opening report menu to download Excel...",
-                    platform = "bim360" });
+                    message = $"[{project.Name}] Opening report menu to download Excel (row {targetRowIndex})...",
+                    platform });
 
                 // Exponential retry for the download (5 attempts, delays: 0 2 4 8 16 seconds)
                 IDownload? download = null;
@@ -548,7 +635,7 @@ namespace AutodeskAutomation.Services
                     {
                         sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
                             message = $"[{project.Name}] Download retry {attempt}/{MaxDownloadAttempts} -- waiting {delayMs / 1000}s (exponential backoff)...",
-                            platform = "bim360" });
+                            platform });
                         await Task.Delay(delayMs);
                     }
 
@@ -560,8 +647,11 @@ namespace AutodeskAutomation.Services
                         await Task.Delay(3000);
                     }
 
-                    // Click the three-dot menu on the target row
-                    var menuBtn = page.Locator("[data-testid=\"table-row-menu\"]").First;
+                    // Click the three-dot menu scoped to the target row index
+                    var rowSel  = $"[data-testid=\"report-list-table-row-{targetRowIndex}\"]";
+                    var menuBtn = page.Locator($"{rowSel} [data-testid=\"table-row-menu\"]");
+                    if (await menuBtn.CountAsync() == 0)
+                        menuBtn = page.Locator("[data-testid=\"table-row-menu\"]").Nth(targetRowIndex);
                     if (await menuBtn.CountAsync() == 0)
                     {
                         delayMs = delayMs == 0 ? 2000 : delayMs * 2;
@@ -605,7 +695,7 @@ namespace AutodeskAutomation.Services
                 {
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] Download failed after {MaxDownloadAttempts} attempts",
-                        platform = "bim360" });
+                        platform });
                     return (0, 0L, "");
                 }
 
@@ -618,23 +708,24 @@ namespace AutodeskAutomation.Services
                 Console.WriteLine($"[reports] Downloaded: {filePath}");
                 sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
                     message = $"[{project.Name}] Excel downloaded: {fileName}",
-                    platform = "bim360" });
+                    platform });
 
                 // Read the Excel file and extract summary; return file count + size
-                return await ReadExcelSummary(filePath, project, userEmail, sse);
+                return await ReadExcelSummary(filePath, project, userEmail, sse, platform);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[reports] Navigation failed (non-fatal): {ex.Message}");
                 sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                     message = $"[{project.Name}] Reports capture error: {ex.Message}",
-                    platform = "bim360" });
+                    platform });
                 return (0, 0L, "");
             }
         }
 
         private static async Task<(int TotalFiles, long TotalSizeBytes, string TotalSizeFormatted)> ReadExcelSummary(
-            string filePath, ProjectDocument project, string? userEmail, SseService sse)
+            string filePath, ProjectDocument project, string? userEmail, SseService sse,
+            string platform = "bim360")
         {
             return await Task.Run(() =>
             {
@@ -670,7 +761,7 @@ namespace AutodeskAutomation.Services
                     var colList = string.Join(", ", headers.Keys);
                     Console.WriteLine($"[excel] Columns found: {colList}");
                     sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                        message = $"[{project.Name}] Excel columns: {colList}", platform = "bim360" });
+                        message = $"[{project.Name}] Excel columns: {colList}", platform });
 
                     // Find the file size column -- case-insensitive, partial match
                     // ACC Files Log typically uses "File size" or "Size"
@@ -683,7 +774,7 @@ namespace AutodeskAutomation.Services
                             sizeCol = hdr.Value;
                             Console.WriteLine($"[excel] Using size column: '{hdr.Key}' (col {sizeCol})");
                             sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
-                                message = $"[{project.Name}] File size column: '{hdr.Key}'", platform = "bim360" });
+                                message = $"[{project.Name}] File size column: '{hdr.Key}'", platform });
                             break;
                         }
                     }
@@ -742,7 +833,7 @@ namespace AutodeskAutomation.Services
                     Console.WriteLine($"[excel] {summaryText}");
                     sse.Broadcast("log", new { level = "INFO", timestamp = Now(),
                         message = $"[{project.Name}] Files Log Summary:\n{summaryText}",
-                        platform = "bim360" });
+                        platform });
 
                     // Broadcast summary event for live UI update
                     sse.Broadcast("files-log-summary", new
@@ -752,7 +843,7 @@ namespace AutodeskAutomation.Services
                         totalFiles,
                         totalSizeBytes,
                         totalSizeFormatted = totalSizeStr,
-                        platform    = "bim360"
+                        platform
                     });
 
                     // Persist to RavenDB
@@ -763,7 +854,7 @@ namespace AutodeskAutomation.Services
                     var doc = existing ?? new Models.Documents.ReportDocument { Id = docId };
                     doc.ProjectId    = project.ProjectId;
                     doc.UserEmail    = userEmail;
-                    doc.Platform     = "bim360";
+                    doc.Platform     = platform;
                     doc.Title        = $"{Path.GetFileName(filePath)} | {totalFiles:N0} files | {totalSizeStr}";
                     doc.Status       = "complete";
                     doc.DownloadUrl  = filePath;
@@ -781,7 +872,7 @@ namespace AutodeskAutomation.Services
                     Console.WriteLine($"[excel] Read failed: {ex.Message}");
                     sse.Broadcast("log", new { level = "WARN", timestamp = Now(),
                         message = $"[{project.Name}] Excel read failed: {ex.Message}",
-                        platform = "bim360" });
+                        platform });
                     return (0, 0L, "");
                 }
             });

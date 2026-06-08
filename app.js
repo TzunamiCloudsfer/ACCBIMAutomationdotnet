@@ -333,21 +333,31 @@ function handleEvent(type, data) {
         A.progress  = { completed: 0, total: data.total };
         A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
-        A.projStatuses = {};
 
-        // Pre-populate all projects with their initial status so the table
-        // renders the full list immediately — not one row at a time.
+        // In a chain run OR a wizard multi-platform run, the second export-start must
+        // NOT wipe results already collected by the first phase.
+        if (!A.chainRunning && !(typeof NP !== 'undefined' && NP._multiPlatform)) {
+          A.projStatuses = {};
+        }
+
+        // Pre-populate THIS platform's projects with their initial status.
         // Explicitly omit files/size so stale values from a previous run don't show.
         if (data.projects && data.projects.length) {
           data.projects.forEach(function(p) {
             const id = p.id || p.name;
-            A.projStatuses[id] = { status: p.status || 'pending', name: p.name };
-            // No files/size — they must come from the new run's files-log-summary / project-done
+            const prev = A.projStatuses[id] || {};
+            A.projStatuses[id] = { ...prev, status: p.status || 'pending', name: p.name };
           });
         }
-        // Also clear stale files/size on NP project entries (wizard re-run)
+
+        // Clear stale files/size/status only for projects belonging to THIS platform
+        // so the other platform's completed results are preserved in the wizard.
         if (typeof NP !== 'undefined' && NP.projects) {
-          NP.projects.forEach(function(p) { delete p.files; delete p.size; delete p.status; });
+          NP.projects.forEach(function(p) {
+            if (!platform || p.platform === platform) {
+              delete p.files; delete p.size; delete p.status;
+            }
+          });
         }
 
         if (A.page !== 'export' && A.page !== 'newpage') navigate('export');
@@ -451,6 +461,8 @@ function handleEvent(type, data) {
       loadProjects();
       aecHide();
       npSyncComplete();
+      // If the wizard is already on step 5, refresh the results table now
+      if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
       break;
 
     case 'export-error':
@@ -579,6 +591,8 @@ function handleEvent(type, data) {
       updatePauseResumeUI();
       refreshPlatformStats();
       _resetDiscoverAllBtn();
+      npSyncComplete();
+      if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
       break;
 
     case 'checkpoint-reset':
@@ -2206,6 +2220,7 @@ const NP = {
   projects:[], selectedIds:new Set(), filterTab:'all',
   loginStart:null, loginTimer:null,
   export:{running:false,completed:0,total:0,noDm:0,success:0},
+  _multiPlatform:false, _pendingPlatforms:0,
 };
 
 function npGoStep(n){
@@ -2305,6 +2320,7 @@ function npSyncProjectDone(data) {
   }
 
   if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
+  if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
 }
 
 // Dedicated helper — updates every element that shows the no_dm count
@@ -2322,6 +2338,16 @@ function _npSetNoDm(count) {
 }
 
 function npSyncComplete() {
+  // Track how many platforms have completed in a multi-platform wizard run
+  if (NP._multiPlatform) {
+    NP._pendingPlatforms = Math.max(0, (NP._pendingPlatforms || 1) - 1);
+    if (NP._pendingPlatforms > 0) {
+      // Other platform still running — update progress but don't mark overall done yet
+      if (typeof npUpdateExport === 'function') npUpdateExport();
+      return;
+    }
+    NP._multiPlatform = false;
+  }
   if (NP.step !== 4) return;
   NP.export.running = false;
   if (typeof npUpdateExport === 'function') npUpdateExport();
@@ -2416,9 +2442,14 @@ async function npStartExport(){
   var ids=Array.from(NP.selectedIds);
   var accIds=NP.projects.filter(function(p){return p.platform!=='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
   var bimIds=NP.projects.filter(function(p){return p.platform==='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
+  var startingAcc=(accIds.length&&NP.platform!=='bim360');
+  var startingBim=(bimIds.length&&NP.platform!=='acc');
+  // Flag multi-platform run so export-start doesn't wipe the first platform's data
+  NP._multiPlatform = !!(startingAcc && startingBim);
+  NP._pendingPlatforms = (startingAcc?1:0)+(startingBim?1:0);
   try{
-    if(accIds.length&&NP.platform!=='bim360')await fetch('/api/acc/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:accIds})});
-    if(bimIds.length&&NP.platform!=='acc')await fetch('/api/bim360/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:bimIds})});
+    if(startingAcc)await fetch('/api/acc/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:accIds})});
+    if(startingBim)await fetch('/api/bim360/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:bimIds})});
     NP.export.total=ids.length;npUpdateExport();
   }catch(e){if(typeof showToast!=='undefined')showToast('Export start failed: '+e.message,'error');}
 }

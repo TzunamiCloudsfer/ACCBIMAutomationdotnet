@@ -1897,6 +1897,19 @@ img {
   text-align: right;
 }
 
+.psi-th-files, .psi-th-size {
+  width: 80px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.psi-files-cell, .psi-size-cell {
+  text-align: right;
+  white-space: nowrap;
+  color: var(--txt-2);
+  font-size: 12px;
+}
+
 .psi-row td {
   padding: 8px 14px;
   font-size: 12.5px;
@@ -2195,6 +2208,14 @@ img {
 
 .cstat.cstat-muted>span {
   color: var(--txt-3);
+}
+
+.cstat.cstat-files>span {
+  color: var(--brand);
+}
+
+.cstat.cstat-size>span {
+  color: var(--brand-m, var(--brand));
 }
 
 .cstat>label {
