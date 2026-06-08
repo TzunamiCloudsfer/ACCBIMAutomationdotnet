@@ -59,10 +59,20 @@ namespace AutodeskAutomation.Controllers
                     var all = await AutodeskApiService.Instance
                         .FetchBim360Projects(adminUrl, authPath);
 
-                    var active = all.Where(p =>
-                        !string.Equals(p.Status, "inactive", StringComparison.OrdinalIgnoreCase)).ToList();
+                    // BIM360 HQ API returns nothing for pure ACC hubs — fall back to ACC Admin API
+                    bool usedAccFallback = false;
+                    if (all.Count == 0)
+                    {
+                        var accAdminUrl = _db.GetAdminUrl(_srv.ActiveUser, "acc") ?? adminUrl;
+                        all = await AutodeskApiService.Instance
+                            .FetchAccProjects(accAdminUrl, authPath);
+                        usedAccFallback = true;
+                    }
 
-                    // Merge BIM360 projects found during ACC hub discovery
+                    var active = all.Where(p =>
+                        string.Equals(p.Status, "active", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    // Merge any additional BIM360-platform projects cached from a prior ACC discovery
                     var accProjs = _db.GetProjects(_srv.ActiveUser, "acc");
                     var bim360Extra = accProjs.Where(p =>
                         string.Equals(p.RawPlatform, "bim360", StringComparison.OrdinalIgnoreCase));
@@ -70,7 +80,22 @@ namespace AutodeskAutomation.Controllers
                     foreach (var p in bim360Extra)
                         if (!knownIds.Contains(p.ProjectId)) active.Add(p);
 
-                    _db.SaveProjectDocuments(_srv.ActiveUser, "bim360", active);
+                    if (usedAccFallback)
+                    {
+                        // Split by the platform icon: "B" (RawPlatform=bim360) → bim360, ACC icon → acc
+                        var bim360Projects = active.Where(p =>
+                            string.Equals(p.RawPlatform, "bim360", StringComparison.OrdinalIgnoreCase)).ToList();
+                        var accProjects = active.Where(p =>
+                            !string.Equals(p.RawPlatform, "bim360", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                        _db.SaveProjectDocuments(_srv.ActiveUser, "bim360", bim360Projects);
+                        _db.SaveProjectDocuments(_srv.ActiveUser, "acc", accProjects);
+                    }
+                    else
+                    {
+                        _db.SaveProjectDocuments(_srv.ActiveUser, "bim360", active);
+                    }
+
                     _sse.Broadcast("discover-complete", new
                     {
                         projects = active.Select(p => new { id = p.ProjectId, name = p.Name, accountId = p.AccountId }),

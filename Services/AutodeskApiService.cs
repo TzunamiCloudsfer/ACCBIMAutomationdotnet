@@ -62,7 +62,8 @@ namespace AutodeskAutomation.Services
         private static async Task<List<ProjectDocument>> PaginateAccProjects(string authHeader, string accountId)
         {
             var results = new List<ProjectDocument>();
-            string? nextHref = $"https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit=100";
+            const int limit = 100;
+            string? nextHref = $"https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit={limit}&status=active";
 
             while (!string.IsNullOrEmpty(nextHref))
             {
@@ -98,10 +99,14 @@ namespace AutodeskAutomation.Services
                 if (string.IsNullOrEmpty(nextHref))
                 {
                     var offset = json["pagination"]?["offset"]?.Value<int>() ?? 0;
-                    var limit  = json["pagination"]?["limit"]?.Value<int>()  ?? 100;
-                    var total  = json["pagination"]?["total"]?.Value<int>()  ?? 0;
-                    if (offset + limit < total)
-                        nextHref = $"https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit={limit}&offset={offset + limit}";
+                    var fetchedLimit = json["pagination"]?["limit"]?.Value<int>() ?? limit;
+                    var total  = json["pagination"]?["total"]?.Value<int>();
+                    // Use total when available; fall back to "got a full page" when total is absent
+                    bool hasMore = total.HasValue
+                        ? offset + fetchedLimit < total.Value
+                        : items.Count == fetchedLimit;
+                    if (hasMore)
+                        nextHref = $"https://developer.api.autodesk.com/construction/admin/v1/accounts/{accountId}/projects?limit={fetchedLimit}&offset={offset + fetchedLimit}&status=active";
                 }
             }
             return results;
