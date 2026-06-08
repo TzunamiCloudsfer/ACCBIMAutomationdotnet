@@ -394,6 +394,7 @@ namespace AutodeskAutomation.Services
                     status = result.Status, error = result.Error,
                     totalFiles = result.TotalFiles,
                     totalSizeFormatted = result.TotalSizeFormatted,
+                    totalSizeBytes = result.TotalSizeBytes,
                     platform = "bim360" });
                 sse.Broadcast("progress-update", new { completed = i + 1, total = pending.Count,
                     results = new { results.Success, results.Failed, no_dm = results.NoDm,

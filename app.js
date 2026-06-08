@@ -393,8 +393,9 @@ function handleEvent(type, data) {
           name:   data.project.name,
           error:  data.error,
           // Always set fresh values — never inherit stale data from a previous run
-          files:  (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—',
-          size:   data.totalSizeFormatted || '—',
+          files:     (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—',
+          size:      data.totalSizeFormatted || '—',
+          sizeBytes: data.totalSizeBytes || 0,
         };
         upsertPSI(id2, data.status, data.project.name, data.error);
         aecDone(data.status);
@@ -2336,9 +2337,10 @@ function npSyncProjectDone(data) {
   var pid  = data.project && (data.project.id || data.project.name);
   var proj = pid && NP.projects.find(function(p) { return p.id === pid || p.name === pid; });
   if (proj) {
-    proj.files  = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—';
-    proj.size   = data.totalSizeFormatted || '—';
-    proj.status = status;
+    proj.files     = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—';
+    proj.size      = data.totalSizeFormatted || '—';
+    proj.sizeBytes = data.totalSizeBytes || 0;
+    proj.status    = status;
   }
 
   if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
@@ -2506,13 +2508,34 @@ function npSetOverall(pct,label){
   var bar=document.getElementById('np-overall-bar-wrap');if(bar)bar.classList.toggle('np-bar-active',active);
   var dot=document.getElementById('np-overall-dot');if(dot)dot.classList.toggle('np-dot-hidden',!active);
 }
+function _npFormatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '—';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+  if (bytes >= 1048576)    return (bytes / 1048576).toFixed(1)    + ' MB';
+  if (bytes >= 1024)       return (bytes / 1024).toFixed(1)       + ' KB';
+  return bytes + ' B';
+}
+function _npTotalSizeBytes() {
+  var total = 0;
+  NP.projects.forEach(function(p) {
+    if (!NP.selectedIds.has(p.id)) return;
+    var ps = A.projStatuses && A.projStatuses[p.id];
+    var bytes = (ps && ps.sizeBytes) || p.sizeBytes || 0;
+    total += bytes;
+  });
+  return total;
+}
 function npOnEnterResults(){
   var s=NP.export.success,el=document.getElementById('np-res-total');
   if(el)el.textContent=s+' project'+(s!==1?'s':'')+' exported';
+  var se=document.getElementById('np-res-size-total');
+  if(se)se.textContent=_npFormatBytes(_npTotalSizeBytes());
   npRenderResults();
 }
 function npRenderResults(){
   var tbody=document.getElementById('np-res-tbody');if(!tbody)return;
+  var se2=document.getElementById('np-res-size-total');
+  if(se2)se2.textContent=_npFormatBytes(_npTotalSizeBytes());
   var search=(document.getElementById('np-res-search')?document.getElementById('np-res-search').value:'').toLowerCase();
   var filter=document.getElementById('np-res-filter')?document.getElementById('np-res-filter').value:'all';
   var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');};
