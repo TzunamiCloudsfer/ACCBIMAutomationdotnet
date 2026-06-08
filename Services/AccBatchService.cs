@@ -285,15 +285,21 @@ namespace AutodeskAutomation.Services
                 var exportTriggeredAt = DateTime.Now.AddMinutes(-1);
                 var triggered = await dialog.TriggerFilesLogExport();
 
-                // Only set ReportsUrl if the export was actually triggered.
-                // If "Files log" wasn't found, skip report capture to avoid a 5-minute wait.
+                if (!triggered)
+                    return new ExportResult { Status = "failed", Error = "Files log option not found in Export dropdown",
+                        Duration = (DateTime.UtcNow - start).TotalMilliseconds };
+
                 return new ExportResult { Status = "success",
                     Duration = (DateTime.UtcNow - start).TotalMilliseconds, EmailsQueued = 1,
-                    ReportsUrl = triggered ? $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}" : null,
+                    ReportsUrl = $"https://acc.autodesk.com/docs/reports/projects/{project.ProjectId}",
                     ExportTriggeredAt = exportTriggeredAt };
             }
             catch (Exception ex)
             {
+                if(ex.Message.Equals("link not found"))
+                {
+                    return new ExportResult { Status = "no_dm", Duration = (DateTime.UtcNow - start).TotalMilliseconds };
+                }
                 return new ExportResult { Status = "failed", Error = ex.Message,
                     Duration = (DateTime.UtcNow - start).TotalMilliseconds };
             }

@@ -12,9 +12,38 @@ namespace AutodeskAutomation.Playwright.Acc
 
         public async Task<bool> TriggerFilesLogExport()
         {
-            // Step 1: Click the Export toolbar dropdown — same selector and approach as
-            // DocumentLogDialog.OpenAccExportDropdown (confirmed working)
+            var sse = AutodeskAutomation.Services.SseService.Instance;
+
+            // Step 1: Wait up to 15s for the Export toolbar dropdown to render.
+            // DocumentLogDialog (working BIM360/ACC path) does the same poll before clicking.
+            // Without this, the toolbar may not exist yet after the 2s wait in FilesPage.
             var exportBtn = _page.Locator("[data-testid=\"action-toolbar-dropdown\"]");
+            bool toolbarFound = false;
+            for (int t = 0; t < 15; t++)
+            {
+                try
+                {
+                    if (await exportBtn.CountAsync() > 0 && await exportBtn.IsVisibleAsync())
+                    {
+                        toolbarFound = true;
+                        break;
+                    }
+                }
+                catch { }
+                await Task.Delay(1000);
+            }
+
+            if (!toolbarFound)
+            {
+                sse.Broadcast("log", new {
+                    level = "WARN",
+                    timestamp = DateTime.UtcNow.ToString("O"),
+                    message = "[ACC Export] Toolbar dropdown not found after 15s — skipping Files log export",
+                    platform = "acc"
+                });
+                return false;
+            }
+
             await exportBtn.ClickAsync(new LocatorClickOptions { Force = true });
             await Task.Delay(2500);
 

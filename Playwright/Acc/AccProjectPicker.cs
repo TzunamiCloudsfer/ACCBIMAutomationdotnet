@@ -23,7 +23,7 @@ namespace AutodeskAutomation.Playwright.Acc
 
             await _page.GotoAsync(url, new PageGotoOptions
                 { WaitUntil = WaitUntilState.DOMContentLoaded, Timeout = 60_000 });
-            await Task.Delay(2000);
+            await Task.Delay(8000);
 
             var currentUrl = _page.Url;
             sse.Broadcast("log", new { level = "INFO",

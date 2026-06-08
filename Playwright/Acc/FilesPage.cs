@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using AutodeskAutomation.Services;
 using Microsoft.Playwright;
 
 namespace AutodeskAutomation.Playwright.Acc
@@ -25,6 +26,7 @@ namespace AutodeskAutomation.Playwright.Acc
             }
             catch
             {
+                throw new Exception("link not found");
                 // Link not found or click failed — we're already on the files page, proceed
             }
         }
