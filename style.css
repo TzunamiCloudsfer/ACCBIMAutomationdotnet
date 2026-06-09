@@ -8054,6 +8054,65 @@ body[data-platform="bim360"] .nav-item.active {
     margin-bottom: 12px;
 }
 
+.np-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 4px 2px;
+    min-height: 36px;
+}
+
+.np-page-info {
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.np-page-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.np-page-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.np-page-btn:hover:not(:disabled) {
+    background: #f0f5ff;
+    border-color: #1a3d7c;
+    color: #1a3d7c;
+}
+
+.np-page-btn:disabled {
+    opacity: 0.38;
+    cursor: default;
+}
+
+.np-page-btn-active {
+    background: #1a3d7c !important;
+    border-color: #1a3d7c !important;
+    color: #fff !important;
+}
+
 .np-footer {
     display: flex;
     align-items: center;

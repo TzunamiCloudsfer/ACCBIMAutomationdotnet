@@ -964,12 +964,13 @@
                         <button class="np-ftab" data-tab="bim360" onclick="npSetTab(this,'bim360')">BIM360</button>
                         <button class="np-ftab" data-tab="acc" onclick="npSetTab(this,'acc')">Forma</button>
                     </div>
-                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-proj-search" placeholder="Search projects..." oninput="npRenderTable()"></div>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-proj-search" placeholder="Search projects..." oninput="NP.page=1;npRenderTable()"></div>
                 </div>
                 <div class="np-table-wrap">
                     <table class="np-table"><thead><tr><th style="width:44px;text-align:center"><input type="checkbox" id="np-chk-all" onchange="npToggleAll(this.checked)"></th><th>PROJECT NAME</th><th>PLATFORM</th><th>LAST EXPORT</th></tr></thead><tbody id="np-tbody"></tbody></table>
                     <div id="np-empty" class="np-empty hidden">No projects. Enter your admin URL above and click Save &amp; Discover.</div>
                 </div>
+                <div id="np-pagination" class="np-pagination"></div>
                 <div class="np-footer">
                     <span id="np-sel-count" style="font-size:14px;color:#64748b;font-weight:500">0 selected</span>
                     <div style="display:flex;gap:10px;align-items:center;">
@@ -1018,10 +1019,11 @@
                 </div>
                 <div class="np-res-summary"><div><p style="font-size:14px;margin-bottom:4px">Total synchronized data: <strong id="np-res-total">—</strong></p><p style="font-size:14px;margin-bottom:6px">Total file size: <strong id="np-res-size-total">—</strong></p><a href="#" style="font-size:13px;color:#3b7de9;text-decoration:underline">Click here to get the recommendation pricing based on your usage.</a></div><button class="np-btn-primary" style="padding:10px 20px;flex-shrink:0">View Pricing Plans</button></div>
                 <div class="np-res-toolbar">
-                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="14" style="color:#94a3b8;flex-shrink:0"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="npRenderResults()"></div>
-                    <div class="np-res-filter-wrap"><label>Filter by:</label><select id="np-res-filter" class="np-res-filter" onchange="npRenderResults()"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select></div>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="14" style="color:#94a3b8;flex-shrink:0"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-res-search" placeholder="Search projects..." oninput="NP.resPage=1;npRenderResults()"></div>
+                    <div class="np-res-filter-wrap"><label>Filter by:</label><select id="np-res-filter" class="np-res-filter" onchange="NP.resPage=1;npRenderResults()"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select></div>
                 </div>
                 <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
+                <div id="np-res-pagination" class="np-pagination"></div>
             </div>
         </div>
     </div>
