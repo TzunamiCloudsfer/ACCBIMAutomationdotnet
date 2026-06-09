@@ -964,12 +964,13 @@
                         <button class="np-ftab" data-tab="bim360" onclick="npSetTab(this,'bim360')">BIM360</button>
                         <button class="np-ftab" data-tab="acc" onclick="npSetTab(this,'acc')">Forma</button>
                     </div>
-                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-proj-search" placeholder="Search projects..." oninput="npRenderTable()"></div>
+                    <div class="np-search"><svg viewBox="0 0 20 20" fill="currentColor" width="13" style="color:#94a3b8"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" /></svg><input type="search" id="np-proj-search" placeholder="Search projects..." oninput="NP.page=1;npRenderTable()"></div>
                 </div>
                 <div class="np-table-wrap">
                     <table class="np-table"><thead><tr><th style="width:44px;text-align:center"><input type="checkbox" id="np-chk-all" onchange="npToggleAll(this.checked)"></th><th>PROJECT NAME</th><th>PLATFORM</th><th>LAST EXPORT</th></tr></thead><tbody id="np-tbody"></tbody></table>
                     <div id="np-empty" class="np-empty hidden">No projects. Enter your admin URL above and click Save &amp; Discover.</div>
                 </div>
+                <div id="np-pagination" class="np-pagination"></div>
                 <div class="np-footer">
                     <span id="np-sel-count" style="font-size:14px;color:#64748b;font-weight:500">0 selected</span>
                     <div style="display:flex;gap:10px;align-items:center;">
@@ -1024,7 +1025,8 @@
                     <div class="np-res-filter-wrap"><label>Filter by:</label><select id="np-res-filter" class="np-res-filter" onchange="npRenderResults()"><option value="all">All Platforms</option><option value="acc">ACC / Forma</option><option value="bim360">BIM360</option></select></div>
                     <button class="np-btn-primary" onclick="npDownloadReport()" style="padding:7px 14px;font-size:13px;display:flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"/></svg> Download CSV</button>
                 </div>
-                <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>STATUS</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
+                <div class="np-table-wrap"><table class="np-table"><thead><tr><th>PROJECT NAME</th><th>PLATFORM</th><th>FILE COUNT</th><th>FILE SIZE</th></tr></thead><tbody id="np-res-tbody"></tbody></table></div>
+                <div id="np-res-pagination" class="np-pagination"></div>
             </div>
         </div>
     </div>
