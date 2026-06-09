@@ -1,11 +1,11 @@
-'use strict';
+﻿'use strict';
 /* ═══════════════════════════════════════════════════════════════════════════
    Autodesk Automation Platform — Unified Client Application
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── App state ─────────────────────────────────────────────────────────────────
 const A = {
-  page:          'welcome',
+  page:          'newpage',
   platform:      null,          // 'acc' | 'bim360' | null
   _firstInit:    true,          // cleared after first SSE init event — used for page restore
   sessionValid:  false,
@@ -14,7 +14,7 @@ const A = {
   loginDetected: false,
   loginStart:    null,          // Date.now() when browser opened
   loginTimer:    null,          // setInterval handle for countdown
-  MIN_LOGIN_DISPLAY: 60,        // minimum seconds to show login waiting screen
+  MIN_LOGIN_DISPLAY: 3,         // minimum seconds to show login waiting screen
 
   projects:      [],
   selectedIds:   new Set(),
@@ -51,11 +51,15 @@ function navigate(page) {
   A.page = page;
   try { sessionStorage.setItem('ui_page', page); } catch { /* private/incognito */ }
 
-  if (page === 'auth')      refreshAuthUI();
+  // Hide sidebar on full-screen pages (welcome landing + wizard)
+  document.body.classList.toggle('wizard-fullscreen', page === 'newpage' || page === 'welcome');
+
+  if (page === 'auth')      { refreshAuthUI(); checkExistingSession(); }
   if (page === 'platforms') refreshPlatformStats();
   if (page === 'projects')  loadProjects();
   if (page === 'export')    syncExportPage();
   if (page === 'logs')      loadLogs();
+  if (page === 'newpage')   { if (typeof npGoStep === 'function') { npGoStep(NP.step); if (A.sessionValid && NP.step === 1) npShowSuccess(A.activeUser); } }
 }
 
 function selectPlatform(platform) {
@@ -166,8 +170,11 @@ function connectSSE() {
     sseRetry = setTimeout(connectSSE, 3000);
   };
   sse.onmessage = e => {
-    try { const { type, data } = JSON.parse(e.data); handleEvent(type, data); }
-    catch { /* ignore malformed */ }
+    let type, data;
+    try { ({ type, data } = JSON.parse(e.data)); }
+    catch { return; }   // ignore malformed JSON only
+    try { handleEvent(type, data); }
+    catch (err) { console.error('[SSE handler error]', type, err); }
   };
 }
 
@@ -254,7 +261,19 @@ function handleEvent(type, data) {
             ? { success: sr.success || 0, failed: sr.failed || 0,
                 no_dm: sr.no_dm ?? sr.noDm ?? 0,
                 skipped: sr.skipped || 0, emailsQueued: sr.emailsQueued || 0 }
-            : { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 }; }
+            : { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+          // Sync NP wizard counters so the "Projects without data management" card updates on reconnect
+          const serverNoDm = A.results.no_dm;
+          if (serverNoDm > (NP.export.noDm || 0)) NP.export.noDm = serverNoDm;
+          NP.export.success      = A.results.success;
+          NP.export.completed    = A.progress.completed;
+          NP.export.total        = Math.max(NP.export.total || 0, A.progress.total || 0);
+          NP.export.accessDenied = Object.values(A.projStatuses || {}).filter(function(s){ return s.status === 'access_denied'; }).length;
+          const noDmEl = document.getElementById('np-nodm');
+          if (noDmEl) noDmEl.textContent = String(NP.export.noDm);
+          const adEl = document.getElementById('np-access-denied');
+          if (adEl) adEl.textContent = String(NP.export.accessDenied);
+        }
         A.projStatuses = liveData?.projectStatuses || {};
         A.exportStatus = liveData?.exportStatus || 'idle';
       }
@@ -280,7 +299,11 @@ function handleEvent(type, data) {
       break;
 
     case 'log':
-      if (isCurrentPlatform) { A.logs.push(data); appendLog(data); }
+      if (!platform || platform === A.platform || platform === A.runningPlatform || platform === 'auth') {
+        A.logs.push(data);
+        appendLog(data);
+        aecAdvanceFromLog(data.message || '');
+      }
       break;
 
     case 'login-status':
@@ -288,7 +311,17 @@ function handleEvent(type, data) {
       if (data.status === 'waiting')      onLoginWaiting(data.elapsed);
       if (data.status === 'completed') {
         if (data.user) { A.activeUser = data.user; updateUserDisplay(); }
-        onLoginDetected(data.elapsed);
+        A.sessionValid = true;
+        // When on the new wizard page, advance to Step 2 immediately
+        if (A.page === 'newpage') {
+          if (typeof npClearTimer === 'function') npClearTimer();
+          if (typeof npShowSuccess === 'function') npShowSuccess(data.user);
+          setTimeout(function() { if (typeof npGoStep === 'function') npGoStep(2); }, 1200);
+        } else if (data.source === 'cookie' || data.source === '2-legged') {
+          finalizeLogin();
+        } else {
+          onLoginDetected(data.elapsed);
+        }
       }
       if (data.status === 'failed') onLoginFailed(data.error);
       break;
@@ -296,75 +329,110 @@ function handleEvent(type, data) {
     case 'export-start':
       if (platform === 'acc')    A.accRunning    = true;
       if (platform === 'bim360') A.bim360Running = true;
-      A.exportRunning = true;
-      if (isCurrentPlatform) {
+      A.exportRunning   = true;
+      if (platform) { A.runningPlatform = platform; A.platform = platform; }
+      {
         A.exportStatus = 'running'; A.exportPaused = false;
-        A.runningPlatform = platform || A.platform;
-        A.progress  = { completed: 0, total: data.total };
-        A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
         A.logs      = []; clearTerminal();
-        // For chain runs, keep file count/size already captured from a previous phase.
-        // For standalone runs, start fresh.
-        if (!A.chainRunning) A.projStatuses = {};
-        // Pre-populate all projects so the full list shows immediately,
-        // merging so any existing files/size/sizeBytes are preserved.
-        if (Array.isArray(data.projects) && data.projects.length) {
-          data.projects.forEach(p => {
-            const key = p.id || p.name;
-            const existing = A.projStatuses[key] || {};
-            A.projStatuses[key] = { ...existing, status: p.status || 'pending', name: p.name };
+
+        // In a chain run OR a wizard multi-platform run, the second export-start must
+        // NOT wipe results/statuses already collected by the first phase.
+        var _isMulti = A.chainRunning || (typeof NP !== 'undefined' && NP._multiPlatform);
+        if (!_isMulti) {
+          A.progress  = { completed: 0, total: data.total };
+          A.results   = { success: 0, failed: 0, no_dm: 0, skipped: data.skipped || 0, emailsQueued: 0 };
+          A.projStatuses = {};
+        }
+
+        // Pre-populate THIS platform's projects with their initial status.
+        // Explicitly omit files/size so stale values from a previous run don't show.
+        if (data.projects && data.projects.length) {
+          data.projects.forEach(function(p) {
+            const id = p.id || p.name;
+            const prev = A.projStatuses[id] || {};
+            A.projStatuses[id] = { ...prev, status: p.status || 'pending', name: p.name };
           });
         }
-        if (A.page !== 'export') navigate('export');
+
+        // Clear stale files/size/status only for projects belonging to THIS platform
+        // so the other platform's completed results are preserved in the wizard.
+        if (typeof NP !== 'undefined' && NP.projects) {
+          NP.projects.forEach(function(p) {
+            if (!platform || p.platform === platform) {
+              delete p.files; delete p.size; delete p.status;
+            }
+          });
+        }
+
+        if (A.page !== 'export' && A.page !== 'newpage') navigate('export');
         navBadgeExport(true);
         syncChips(); syncProgress();
         showEl('export-complete-card', false);
         showEl('pause-banner', false);
+        aecHide();
         setExportTitle('Export in Progress', 'Processing projects one by one…');
         syncExportPage(); updatePauseResumeUI();
       }
       break;
 
     case 'project-start':
-      if (isCurrentPlatform) {
+      {
         const id1 = data.project.id || data.project.name;
         A.projStatuses[id1] = { status: 'exporting', name: data.project.name };
         upsertPSI(id1, 'exporting', data.project.name);
         setText('proj-panel-count', `${data.index}/${data.total}`);
+        aecShow(data.project.name, data.index, data.total);
       }
       break;
 
     case 'project-done':
-      if (isCurrentPlatform) {
+      {
         const id2 = data.project.id || data.project.name;
-        const prev2 = A.projStatuses[id2] || {};
-        A.projStatuses[id2] = { status: data.status, name: data.project.name, error: data.error,
-          files:     data.totalFiles         || prev2.files     || 0,
-          size:      data.totalSizeFormatted || prev2.size      || '',
-          sizeBytes: prev2.sizeBytes         || 0 };
+        // Merge files/size into existing state entry (files-log-summary may have already set them)
+        const existing2 = A.projStatuses[id2] || {};
+        A.projStatuses[id2] = {
+          ...existing2,
+          status: data.status,
+          name:   data.project.name,
+          error:  data.error,
+          // Always set fresh values — never inherit stale data from a previous run
+          files:     (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—',
+          size:      data.totalSizeFormatted || '—',
+          sizeBytes: data.totalSizeBytes || 0,
+        };
         upsertPSI(id2, data.status, data.project.name, data.error);
-      }
-      break;
-
-    case 'files-log-summary':
-      { const pid = data.projectId;
-        if (pid) {
-          const prev = A.projStatuses[pid] || {};
-          A.projStatuses[pid] = { ...prev,
-            files:     data.totalFiles         || prev.files     || 0,
-            size:      data.totalSizeFormatted || prev.size      || '',
-            sizeBytes: data.totalSizeBytes     || prev.sizeBytes || 0 };
-          if (prev.status) upsertPSI(pid, A.projStatuses[pid].status, A.projStatuses[pid].name, A.projStatuses[pid].error);
-        }
+        aecDone(data.status);
+        npSyncProjectDone(data);
       }
       break;
 
     case 'progress-update':
-      if (isCurrentPlatform) {
-        A.progress = { completed: data.completed, total: data.total };
-        A.results  = { ...data.results };
-        syncChips(); syncProgress();
+      A.progress = { completed: data.completed, total: data.total };
+      if (data.results) {
+        var _multi2 = A.chainRunning || (typeof NP !== 'undefined' && NP._multiPlatform);
+        if (_multi2) {
+          // Multi-platform: each progress-update only carries one platform's running totals.
+          // Use Math.max so accumulated counts from the other platform are never lost.
+          var _pr = A.results;
+          A.results = {
+            success:      Math.max(_pr.success      || 0, data.results.success      || 0),
+            failed:       Math.max(_pr.failed       || 0, data.results.failed       || 0),
+            no_dm:        Math.max(_pr.no_dm        || 0, data.results.no_dm || data.results.noDm || 0),
+            skipped:      Math.max(_pr.skipped      || 0, data.results.skipped      || 0),
+            emailsQueued: Math.max(_pr.emailsQueued || 0, data.results.emailsQueued || 0),
+          };
+        } else {
+          A.results = {
+            success:      data.results.success      || 0,
+            failed:       data.results.failed       || 0,
+            no_dm:        data.results.no_dm  || data.results.noDm  || 0,
+            skipped:      data.results.skipped      || 0,
+            emailsQueued: data.results.emailsQueued || 0,
+          };
+        }
       }
+      syncChips(); syncProgress();
+      npSyncProgress(data);
       break;
 
     case 'export-paused':
@@ -384,24 +452,36 @@ function handleEvent(type, data) {
       break;
 
     case 'export-complete':
-      // Always clear the platform-specific flag regardless of which page is active
       if (platform === 'acc')    A.accRunning    = false;
       if (platform === 'bim360') A.bim360Running = false;
       if (!A.chainRunning) {
         A.exportRunning   = A.accRunning || A.bim360Running;
         if (!A.exportRunning) { A.runningPlatform = null; navBadgeExport(false); }
       }
-      refreshPlatformStats(); // update pending counts in platform tab
-      if (isCurrentPlatform) {
-        A.exportStatus = 'complete'; A.exportPaused = false;
-        const r = data.results || {};
-        A.results = { success: r.success || 0, failed: r.failed || 0,
-          no_dm: r.no_dm ?? r.noDm ?? 0,
-          skipped: r.skipped || 0, emailsQueued: r.emailsQueued || 0 };
-        syncChips(); syncProgress();
-        showExportComplete(A.results);
-        updatePauseResumeUI();
+      // Always update results regardless of current platform — export just finished
+      A.exportStatus = 'complete'; A.exportPaused = false;
+      if (data.results) {
+        A.results = {
+          success:      data.results.success      || 0,
+          failed:       data.results.failed       || 0,
+          no_dm:        data.results.no_dm  || data.results.noDm  || 0,
+          skipped:      data.results.skipped      || 0,
+          emailsQueued: data.results.emailsQueued || 0,
+        };
       }
+      // Advance progress bar to 100% — final total comes from progress-update; use what we have
+      if (A.progress.total > 0)
+        A.progress.completed = A.progress.total;
+      syncChips(); syncProgress();
+      _syncExportSpinners();
+      showExportComplete(A.results);
+      updatePauseResumeUI();
+      refreshPlatformStats();
+      loadProjects();
+      aecHide();
+      npSyncComplete();
+      // If the wizard is already on step 5, refresh the results table now
+      if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
       break;
 
     case 'export-error':
@@ -500,8 +580,7 @@ function handleEvent(type, data) {
       A.platform = data.phase;
       document.body.dataset.platform = data.phase;
       try { sessionStorage.setItem('ui_platform', data.phase); } catch {}
-      // Keep A.projStatuses — it holds file count/size from the previous phase.
-      // The DOM list is cleared below so only the new phase's projects appear live.
+      A.projStatuses = {};
       A.logs = [];
       A.progress = { completed: 0, total: 0 };
       A.results  = { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
@@ -531,6 +610,80 @@ function handleEvent(type, data) {
       updatePauseResumeUI();
       refreshPlatformStats();
       _resetDiscoverAllBtn();
+      npSyncComplete();
+      if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
+      break;
+
+    case 'checkpoint-reset':
+      if (platform === 'acc')    A.accRunning    = false;
+      if (platform === 'bim360') A.bim360Running = false;
+      A.exportRunning   = A.accRunning || A.bim360Running;
+      A.exportStatus    = 'idle';
+      A.exportPaused    = false;
+      A.runningPlatform = A.exportRunning ? A.runningPlatform : null;
+      A.progress        = { completed: 0, total: 0 };
+      A.results         = { success: 0, failed: 0, no_dm: 0, skipped: 0, emailsQueued: 0 };
+      A.projStatuses    = {};
+      if (!A.exportRunning) navBadgeExport(false);
+      syncChips(); syncProgress();
+      showEl('export-complete-card', false);
+      showEl('pause-banner', false);
+      aecHide();
+      updatePauseResumeUI();
+      setExportTitle('Ready', 'Checkpoint reset — all projects queued for next run.');
+      loadProjects();
+      // Also refresh wizard project table if on step 3
+      if (A.page === 'newpage' && NP.step === 3) npLoadProjects();
+      showToast('Checkpoint reset — ' + (data.total || 0) + ' projects re-queued.', 'info');
+      break;
+
+    case 'files-log-summary':
+      {
+        const pid = data.projectId || data.projectName;
+        if (pid) {
+          // Persist in state so upsertPSI can always read it, regardless of DOM timing
+          if (!A.projStatuses[pid]) A.projStatuses[pid] = {};
+          A.projStatuses[pid].files = data.totalFiles  != null ? Number(data.totalFiles).toLocaleString() : '—';
+          A.projStatuses[pid].size  = data.totalSizeFormatted || '—';
+          // Also update live row if it exists
+          updatePsiSummary(pid, data.totalFiles, data.totalSizeFormatted);
+          // Update wizard NP project entry too
+          npSyncFileSummary(pid, A.projStatuses[pid].files, A.projStatuses[pid].size);
+        }
+      }
+      break;
+
+    case 'account-detected':
+      // Server saved an admin URL for this platform after detecting the account from the Hubs API.
+      // Store it in local state, update any visible URL inputs, and start discovery automatically.
+      if (platform === 'acc') {
+        A.accAdminUrl = data.url;
+        // Fill the URL input on the projects page if visible and empty
+        const accInput = $('admin-url-input');
+        if (accInput && !accInput.value && A.platform === 'acc') accInput.value = data.url;
+      }
+      if (platform === 'bim360') {
+        A.bim360AdminUrl = data.url;
+        const bimInput = $('admin-url-input');
+        if (bimInput && !bimInput.value && A.platform === 'bim360') bimInput.value = data.url;
+      }
+      // Fill wizard URL input
+      const npInput = document.getElementById('np-url-input');
+      if (npInput && !npInput.value) npInput.value = data.url;
+      // Refresh platform stats so project counts update
+      refreshPlatformStats();
+      showToast(`${platform.toUpperCase()} account detected — "${data.hubName || data.accountId}". URL saved.`, 'success');
+      // Auto-start discovery for this platform if no projects are loaded yet
+      if (A.sessionValid && !A.exportRunning) {
+        const hasProjects = platform === 'acc'
+          ? (A.accStats.projectCount || 0) > 0
+          : (A.bim360Stats.projectCount || 0) > 0;
+        if (!hasProjects) {
+          setTimeout(function() {
+            api('/api/' + platform + '/projects/discover', 'POST').catch(function() {});
+          }, 800);
+        }
+      }
       break;
 
     case 'user-changed': {
@@ -567,8 +720,14 @@ function handleEvent(type, data) {
       updateUserDisplay();
       refreshPlatformStats();
       // Send the user back to platforms so they start fresh
-      if (A.page !== 'welcome' && A.page !== 'auth') navigate('platforms');
-      showToast(`Switched to ${A.activeUser || 'default account'} — refreshed.`, 'info');
+      // Exception: if on 'newpage' wizard, advance to Step 2 instead of redirecting
+      if (A.page === 'newpage') {
+        if (typeof npShowSuccess === 'function') npShowSuccess(A.activeUser);
+        setTimeout(function() { if (typeof npGoStep === 'function') npGoStep(2); }, 1000);
+      } else if (A.page !== 'welcome' && A.page !== 'auth') {
+        navigate('platforms');
+      }
+      showToast(`Signed in as ${A.activeUser || 'account'} — ready to export.`, 'success');
       break;
     }
   }
@@ -647,10 +806,48 @@ function setBanner(type, msg) {
 }
 function hideBanner() { const b = $('session-banner'); if (b) b.classList.add('hidden'); }
 
+// ── Auto-check for existing Autodesk session on page load ────────────────────
+// If valid cookies / stored token exist, authenticate silently without a popup.
+async function checkExistingSession() {
+  try {
+    const res = await api('/api/auth/session/check');
+    if (res && res.valid) {
+      showAuthState('success');
+      showToast(`Signed in automatically (${res.user || 'saved session'})`, 'info');
+      return true;
+    }
+  } catch { /* server not ready */ }
+  return false;
+}
+
 // ── Login flow ────────────────────────────────────────────────────────────────
 async function startLogin() {
   try {
-    await api('/api/login/start', 'POST', {});
+    const res = await api('/api/login/start', 'POST', {});
+
+    if (res && res.status === 'completed') {
+      // Saved session / cookie path — login completed immediately on the server.
+      // No popup needed; just finalize the UI state.
+      if (res.user) A.activeUser = res.user;
+      finalizeLogin();
+      return;
+    }
+
+    if (res && res.authUrl) {
+      // OAuth popup flow
+      const w = 600, h = 700;
+      const left = Math.max(0, (screen.width  - w) / 2);
+      const top  = Math.max(0, (screen.height - h) / 2);
+      window.open(res.authUrl, 'autodesk_oauth',
+        `width=${w},height=${h},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`);
+      onLoginBrowserOpen();
+      return;
+    }
+
+    // Playwright browser login — server broadcasts SSE events while Chrome is open
+    // (status: "started" with no authUrl). UI already transitions via SSE.
+    onLoginBrowserOpen();
+
   } catch (e) {
     showToast(`Could not start login: ${e.message}`, 'error');
   }
@@ -677,7 +874,7 @@ function onLoginWaiting(serverElapsed) {
 function onLoginDetected(serverElapsed) {
   A.loginDetected = true;
   const clientElapsed = A.loginStart ? Math.floor((Date.now() - A.loginStart) / 1000) : 0;
-  // Enforce minimum 60s display before showing success
+  // Show "completing" message briefly, then unlock the platform button
   const remaining = Math.max(0, A.MIN_LOGIN_DISPLAY - clientElapsed);
   if (remaining > 0) {
     const chip = $('wait-status-chip');
@@ -699,6 +896,46 @@ function finalizeLogin() {
   updateNavBadge('auth', '✓');
   showToast(`Signed in${A.activeUser ? ' as ' + A.activeUser : ''} successfully!`, 'success');
   refreshAuthUI();
+  // Load saved admin URLs and show them on the auth page
+  _loadAndShowSavedUrls();
+}
+
+async function _loadAndShowSavedUrls() {
+  try {
+    const s = await api('/api/status');
+    const accUrl = s.acc && s.acc.accountAdminUrl;
+    const bimUrl = s.bim360 && s.bim360.accountAdminUrl;
+
+    if (accUrl)  A.accAdminUrl    = accUrl;
+    if (bimUrl)  A.bim360AdminUrl = bimUrl;
+
+    // Show URLs on the auth success page so the user can confirm them
+    const urlDisplay = $('detected-urls-card');
+    if (urlDisplay) {
+      urlDisplay.innerHTML = '';
+      if (accUrl) {
+        urlDisplay.innerHTML += `<div class="detected-url-row">
+          <span class="detected-url-badge acc-badge">ACC</span>
+          <span class="detected-url-text" title="${esc(accUrl)}">${esc(accUrl)}</span>
+          <button class="btn btn-ghost btn-xs" onclick="copyToClipboard('${esc(accUrl)}')">Copy</button>
+        </div>`;
+      }
+      if (bimUrl) {
+        urlDisplay.innerHTML += `<div class="detected-url-row">
+          <span class="detected-url-badge bim-badge">BIM360</span>
+          <span class="detected-url-text" title="${esc(bimUrl)}">${esc(bimUrl)}</span>
+          <button class="btn btn-ghost btn-xs" onclick="copyToClipboard('${esc(bimUrl)}')">Copy</button>
+        </div>`;
+      }
+      if (accUrl || bimUrl) urlDisplay.classList.remove('hidden');
+    }
+  } catch { /* non-fatal */ }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard && navigator.clipboard.writeText(text)
+    .then(function() { showToast('URL copied.', 'success'); })
+    .catch(function() { showToast('Could not copy.', 'warning'); });
 }
 
 function onLoginFailed(msg) {
@@ -987,8 +1224,10 @@ function updateStartBtn() {
   const cnt = $('selected-count');
   const n   = A.selectedIds.size;
   const thisPlatformRunning = A.platform === 'acc' ? A.accRunning : A.platform === 'bim360' ? A.bim360Running : A.exportRunning;
-  if (btn) btn.disabled = n === 0 || thisPlatformRunning || A.chainRunning;
-  if (cnt) cnt.textContent = n;
+  // Enable when there are projects to export (selected or pending), not just when selection is non-empty
+  const hasProjects = A.projects.length > 0;
+  if (btn) btn.disabled = !hasProjects || thisPlatformRunning || A.chainRunning;
+  if (cnt) cnt.textContent = n > 0 ? n : '';
 }
 
 async function discoverProjects() {
@@ -1029,23 +1268,30 @@ function setPlatDiscoverBusy(platform, busy) {
 
 async function resetCheckpoint() {
   if (!A.platform) return;
-  const isActivelyRunning = A.exportRunning && A.runningPlatform === A.platform;
-  const msg = isActivelyRunning
-    ? 'An export is currently running. Reset checkpoint? The export will stop immediately and all projects will be re-queued for the next run.'
-    : 'Reset checkpoint? All projects will be marked as pending and re-exported on the next run.';
+  const isRunning = A.exportRunning && A.runningPlatform === A.platform;
+  const msg = isRunning
+    ? 'Export is running. Stop and reset all progress for ' + A.platform.toUpperCase() + '? All projects will be re-queued.'
+    : 'Reset all progress for ' + A.platform.toUpperCase() + '? All projects will be re-queued for the next run.';
   if (!confirm(msg)) return;
+
+  const btn = $('btn-reset-cp');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
   try {
     await api(`/api/${A.platform}/checkpoint`, 'DELETE');
-    showToast('Checkpoint reset.', 'info');
-    loadProjects();
-  } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
+    // SSE 'checkpoint-reset' event will arrive and update the UI
+  } catch (e) {
+    showToast('Reset failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Reset Progress'; }
+  }
 }
 
 async function startExport() {
+  if (!A.platform) { showToast('Select a platform (ACC or BIM360) first.', 'warning'); navigate('platforms'); return; }
   const fresh = $('export-fresh') && $('export-fresh').checked;
   const ids   = [...A.selectedIds];
-  if (!ids.length) { showToast('No projects selected.', 'warning'); return; }
-  try { await api(`/api/${A.platform}/export/start`, 'POST', { projectIds: ids, fresh }); }
+  // If nothing explicitly selected, export all (empty projectIds → controller exports all pending)
+  try { await api(`/api/${A.platform}/export/start`, 'POST', { projectIds: ids.length ? ids : [], fresh }); }
   catch (e) { showToast(`Could not start export: ${e.message}`, 'error'); }
 }
 
@@ -1150,20 +1396,6 @@ function updatePauseResumeUI() {
   } else {
     ctrls.classList.add('hidden');
   }
-  syncExportSpinner();
-}
-
-function syncExportSpinner() {
-  const el = $('export-active-spinner');
-  if (!el) return;
-  const platformRunning = A.exportRunning && (A.chainRunning || A.runningPlatform === A.platform);
-  if (platformRunning) {
-    el.classList.remove('hidden');
-    el.classList.toggle('spinner-paused', !!A.exportPaused);
-  } else {
-    el.classList.add('hidden');
-    el.classList.remove('spinner-paused');
-  }
 }
 
 function toggleLogPanel() {
@@ -1188,7 +1420,6 @@ function syncExportPage() {
   syncChips(); syncProgress();
   if (A.exportStatus === 'complete') showExportComplete(A.results);
   updatePauseResumeUI();
-  syncExportSpinner();
   if (A.exportPaused) showEl('pause-banner', true);
 }
 
@@ -1196,8 +1427,23 @@ function syncChips() {
   const r = A.results;
   setText('chip-success', r.success || 0);
   setText('chip-failed',  r.failed  || 0);
-  setText('chip-nodm',    r.no_dm ?? r.noDm ?? 0);
+  setText('chip-nodm',    r.no_dm || r.noDm || 0);
   setText('chip-skipped', r.skipped || 0);
+  _syncExportSpinners();
+}
+
+function _syncExportSpinners() {
+  const running = !!A.exportRunning;
+  // Title spinner
+  const sp = $('export-spinner');
+  if (sp) sp.classList.toggle('hidden', !running);
+  // LIVE badge on Projects panel
+  const lb = $('live-badge');
+  if (lb) lb.classList.toggle('hidden', !running);
+  // Pulsing border on stat chips
+  document.querySelectorAll('#export-stats-grid .stat-card').forEach(function(c) {
+    c.classList.toggle('stat-running', running);
+  });
 }
 
 function syncProgress() {
@@ -1218,40 +1464,122 @@ function setExportTitle(title, sub) {
 function upsertPSI(id, status, name, error) {
   const list = $('export-project-list');
   if (!list) return;
-  const escapedId = CSS.escape(id);
-  let el = document.getElementById(`psi-${escapedId}`);
-  if (!el) {
+  // Use a simple sanitized key for the element ID — avoid CSS.escape edge cases
+  const rowKey    = String(id).replace(/[^a-zA-Z0-9]/g, '_');
+  const rowId     = 'psi-' + rowKey;
+  let el = document.getElementById(rowId);
+  const isNew = !el;
+  if (isNew) {
     el = document.createElement('tr');
-    el.id = `psi-${escapedId}`;
-    el.className = 'psi-row fade-in';
+    el.id = rowId;
+    el.setAttribute('data-pid', id);
     list.appendChild(el);
   }
-  el.className = `psi-row${status === 'exporting' ? ' psi-row-current' : ''}`;
-  const badgeClass = { pending: 'badge-pending', exporting: 'badge-warn', success: 'badge-completed', failed: 'badge-failed', no_dm: 'badge-muted', skipped: 'badge-muted' }[status] || 'badge-pending';
+  el.className = 'psi-row' + (status === 'exporting' ? ' psi-row-current' : '');
+  const badgeClass = { pending: 'badge-pending', exporting: 'badge-warn', success: 'badge-completed', failed: 'badge-failed', no_dm: 'badge-muted', skipped: 'badge-muted', access_denied: 'badge-failed' }[status] || 'badge-pending';
   const badgeLabel = {
-    pending:   '⏳ Pending',
-    exporting: '<span class="spinner-sm" style="width:9px;height:9px;border-width:1.5px"></span> Processing…',
-    success:   '✓ Done',
-    failed:    `✗ ${trunc(error || 'Failed', 22)}`,
-    no_dm:     '⊘ No DM',
-    skipped:   '↷ Skipped',
+    pending:       '⏳ Pending',
+    exporting:     '<span class="spinner-sm" style="width:9px;height:9px;border-width:1.5px"></span> Processing…',
+    success:       '✓ Done',
+    failed:        '✗ ' + trunc(error || 'Failed', 22),
+    no_dm:         '⊘ No DM',
+    skipped:       '↷ Skipped',
+    access_denied: '⊘ Access Denied',
   }[status] || status;
-  const info = A.projStatuses[id] || {};
-  const filesStr = (info.files > 0) ? info.files.toLocaleString() : '—';
-  const sizeStr  = info.size  || '—';
+
+  // Read files/size from state (more reliable than reading from DOM cells)
+  const projState     = A.projStatuses && A.projStatuses[id];
+  const existingFiles = (projState && projState.files) ? projState.files : '—';
+  const existingSize  = (projState && projState.size)  ? projState.size  : '—';
+
   el.innerHTML = `
     <td class="psi-name-cell" title="${esc(name)}">${esc(name)}</td>
     <td class="psi-status-cell"><span class="badge ${badgeClass}">${badgeLabel}</span></td>
-    <td class="psi-files-cell">${filesStr}</td>
-    <td class="psi-size-cell">${esc(sizeStr)}</td>`;
+    <td class="psi-files-cell mono-id">${esc(existingFiles)}</td>
+    <td class="psi-size-cell  mono-id">${esc(existingSize)}</td>`;
 }
 
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) return '—';
-  if (bytes < 1024)             return bytes + ' B';
-  if (bytes < 1024 * 1024)      return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+function updatePsiSummary(projectId, totalFiles, totalSizeFormatted) {
+  const rowKey = String(projectId).replace(/[^a-zA-Z0-9]/g, '_');
+  const row    = document.getElementById('psi-' + rowKey);
+  if (!row) return;
+  const fc = row.querySelector('.psi-files-cell');
+  const sc = row.querySelector('.psi-size-cell');
+  if (fc) fc.textContent = totalFiles != null ? Number(totalFiles).toLocaleString() : '—';
+  if (sc) sc.textContent = totalSizeFormatted || '—';
+}
+
+// ── Active-export visualization card ─────────────────────────────────────────
+let _aecStep = 0;
+let _aecHideTimer = null;
+
+function aecShow(name, index, total) {
+  clearTimeout(_aecHideTimer);
+  _aecStep = 1;
+  const card   = $('active-export-card');
+  const nameEl = $('aec-name');
+  const subEl  = $('aec-sub');
+  if (!card) return;
+  if (nameEl) nameEl.textContent = name   || '—';
+  if (subEl)  subEl.textContent  = 'Project ' + index + ' of ' + total + ' — navigating to Data Management…';
+  card.classList.remove('hidden');
+  _aecSetStep(1);
+}
+
+function aecHide() {
+  clearTimeout(_aecHideTimer);
+  const card = $('active-export-card');
+  if (card) card.classList.add('hidden');
+  _aecStep = 0;
+}
+
+function aecDone(status) {
+  _aecSetStep(4, status === 'success' ? 'done' : 'skip');
+  clearTimeout(_aecHideTimer);
+  _aecHideTimer = setTimeout(aecHide, 1800);
+}
+
+function _aecSetStep(step, finalState) {
+  _aecStep = step;
+  for (let i = 1; i <= 4; i++) {
+    const el = $(`aec-step-${i}`);
+    if (!el) continue;
+    el.classList.remove('aec-step-active', 'aec-step-done');
+    if (i < step) el.classList.add('aec-step-done');
+    else if (i === step) {
+      if (finalState === 'done' || finalState === 'skip') el.classList.add('aec-step-done');
+      else el.classList.add('aec-step-active');
+    }
+  }
+}
+
+function aecAdvanceFromLog(msg) {
+  if (!msg || _aecStep === 0) return;
+  const m   = msg.toLowerCase();
+  const sub = $('aec-sub');
+
+  // Step 2 — Export triggered
+  if (_aecStep < 2 && (
+    m.includes('toolbar detected') || m.includes('files log') ||
+    m.includes('export submitted') || m.includes('document log') ||
+    m.includes('acc toolbar') || m.includes('bim360 toolbar'))) {
+    _aecSetStep(2);
+    if (sub) sub.textContent = 'Triggering document log export…';
+  }
+  // Step 3 — Report capture
+  else if (_aecStep < 3 && (
+    m.includes('navigating to reports') || m.includes('waiting for report') ||
+    m.includes('found report row') || m.includes('opening report'))) {
+    _aecSetStep(3);
+    if (sub) sub.textContent = 'Waiting for report to generate…';
+  }
+  // Step 4 — Excel read / done
+  else if (_aecStep < 4 && (
+    m.includes('excel downloaded') || m.includes('files log summary') ||
+    m.includes('total files') || m.includes('done --'))) {
+    _aecSetStep(4);
+    if (sub) sub.textContent = 'Reading file summary from Excel report…';
+  }
 }
 
 function showExportComplete(results) {
@@ -1277,16 +1605,6 @@ function showExportComplete(results) {
   setText('cs-failed',  failed);
   setText('cs-emails',  results.emailsQueued || 0);
   setText('cs-skipped', results.skipped || 0);
-
-  // Aggregate file count and size across all exported projects
-  let aggFiles = 0, aggBytes = 0;
-  Object.values(A.projStatuses).forEach(info => {
-    aggFiles += (info.files || 0);
-    aggBytes += (info.sizeBytes || 0);
-  });
-  setText('cs-files', aggFiles > 0 ? aggFiles.toLocaleString() : '—');
-  setText('cs-size',  aggBytes > 0 ? formatBytes(aggBytes) : '—');
-
   card.classList.remove('hidden');
   showNoDmRetrySection();
 }
@@ -1677,8 +1995,9 @@ async function api(url, method = 'GET', body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const res  = await fetch(url, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  let data = {};
+  try { data = await res.json(); } catch (_) { /* empty or non-JSON body */ }
+  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
   return data;
 }
 
@@ -1734,7 +2053,7 @@ function _onAuthSuccess() {
   A.projects   = [];
   A.selectedIds.clear();
   connectSSE();
-  navigate('welcome');
+  navigate('newpage');
 }
 
 function showAuthTab(tab) {
@@ -1831,7 +2150,7 @@ async function logout() {
   if (sse) { sse.close(); sse = null; }
   A.activeUser = null;
   A.appUser    = null;
-  navigate('welcome');
+  navigate('newpage');
   _showAuthOverlay();
   showAuthTab('signin');
 }
@@ -1844,17 +2163,17 @@ document.addEventListener('DOMContentLoaded', () => {
     n.addEventListener('click', () => { navigate(n.dataset.page); closeSidebar(); });
   });
 
-  // Auth page buttons
-  $('btn-login')        .addEventListener('click', startLogin);
-  $('btn-relogin')      .addEventListener('click', startLogin);
-  $('btn-to-platforms') .addEventListener('click', () => navigate('platforms'));
-  $('btn-cancel-login') && $('btn-cancel-login').addEventListener('click', () => {
-    // User cancels — just go back to idle
-    if (A.loginTimer) clearInterval(A.loginTimer);
-    A.loginPending = false; A.loginStart = null;
-    showAuthState('idle');
-    showToast('Login cancelled.', 'warning');
-  });
+    // Auth page buttons
+    $('btn-login').addEventListener('click', startLogin);
+    $('btn-relogin').addEventListener('click', startLogin);
+    $('btn-to-platforms').addEventListener('click', () => navigate('platforms'));
+    $('btn-cancel-login') && $('btn-cancel-login').addEventListener('click', () => {
+        // User cancels — just go back to idle
+        if (A.loginTimer) clearInterval(A.loginTimer);
+        A.loginPending = false; A.loginStart = null;
+        showAuthState('idle');
+        showToast('Login cancelled.', 'warning');
+    });
 
   // Projects page — header checkbox & bulk actions
   $('check-all').addEventListener('change', e => {
@@ -1906,6 +2225,422 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') closeModal();
   });
 
+  // Apply initial page state so wizard-fullscreen class and stepper are set before checkAuth
+  navigate(A.page);
+
   // Check Cloudsfer app auth — starts SSE only if authenticated
   checkAuth();
 });
+
+/* ===================================================================
+   NEW PAGE — 5-step wizard  (np_ namespace)
+   =================================================================== */
+const NP = {
+  step:1, platform:'both',
+  projects:[], selectedIds:new Set(), filterTab:'all',
+  loginStart:null, loginTimer:null,
+  export:{running:false,completed:0,total:0,noDm:0,success:0,accessDenied:0},
+  _multiPlatform:false, _pendingPlatforms:0,
+};
+
+function npGoStep(n){
+  NP.step=n;
+  for(let i=1;i<=5;i++){
+    const pg=document.getElementById('np-page-'+i);
+    if(pg){pg.classList.toggle('np-page-active',i===n);pg.classList.toggle('hidden',i!==n);}
+    const sw=document.getElementById('np-s'+i);
+    if(sw){sw.classList.remove('np-active','np-done');if(i===n)sw.classList.add('np-active');if(i<n)sw.classList.add('np-done');}
+    const ln=document.getElementById('np-l'+i);
+    if(ln)ln.classList.toggle('np-done',i<n);
+  }
+  if(n===3)npLoadProjects();
+  if(n===4)npOnEnterExport();
+  if(n===5)npOnEnterResults();
+}
+
+function npShowIdle(){
+  document.getElementById('np-auth-idle').classList.remove('hidden');
+  document.getElementById('np-auth-waiting').classList.add('hidden');
+  document.getElementById('np-auth-success').classList.add('hidden');
+}
+function npShowWaiting(){
+  document.getElementById('np-auth-idle').classList.add('hidden');
+  document.getElementById('np-auth-waiting').classList.remove('hidden');
+  document.getElementById('np-auth-success').classList.add('hidden');
+}
+function npShowSuccess(user){
+  document.getElementById('np-auth-idle').classList.add('hidden');
+  document.getElementById('np-auth-waiting').classList.add('hidden');
+  const box=document.getElementById('np-auth-success');
+  box.classList.remove('hidden');
+  const u=user?'Signed in as <strong>'+String(user).replace(/</g,'&lt;')+'</strong>':'Successfully connected to Autodesk';
+  box.innerHTML=
+    '<div style="width:56px;height:56px;border-radius:50%;background:#dcfce7;border:3px solid #86efac;display:flex;align-items:center;justify-content:center;margin-bottom:16px">'
+    +'<svg viewBox="0 0 20 20" fill="currentColor" width="28" style="color:#166534"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/></svg></div>'
+    +'<h2 class="np-auth-h2">Authentication Complete</h2>'
+    +'<p class="np-auth-p">'+u+'</p>'
+    +'<div style="display:flex;gap:10px;margin-top:8px;width:100%">'
+    +'  <button class="np-btn-primary" onclick="npGoStep(2)" style="flex:1">Choose Platform →</button>'
+    +'  <button class="np-btn-primary" onclick="npShowIdle()" style="flex:0 0 auto">'
+    +'    <svg viewBox="0 0 20 20" fill="currentColor" width="13"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>'
+    +'    Re-authenticate'
+    +'  </button>'
+    +'</div>';
+}
+
+async function npStartLogin(){
+  NP.loginStart=Date.now();npShowWaiting();npStartTimer();
+  try{await fetch('/api/login/start',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});}
+  catch(e){npClearTimer();npShowIdle();if(typeof showToast!=='undefined')showToast('Could not start login: '+e.message,'error');}
+}
+function npCancelLogin(){npClearTimer();npShowIdle();fetch('/api/login/cancel',{method:'POST'}).catch(function(){});}
+function npStartTimer(){
+  npClearTimer();
+  NP.loginTimer=setInterval(function(){
+    var el=document.getElementById('np-timer');if(!el||!NP.loginStart)return;
+    var s=Math.floor((Date.now()-NP.loginStart)/1000);
+    el.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  },1000);
+}
+function npClearTimer(){if(NP.loginTimer){clearInterval(NP.loginTimer);NP.loginTimer=null;}}
+
+// ── Wizard (NP) sync functions — called directly from handleEvent ─────────────
+function npSyncProgress(data) {
+  var r = data.results || {};
+  // Always take the LARGER of current total and platform batch total.
+  // Prevents a per-platform progress-update from shrinking the multi-platform total
+  // that npOnEnterExport set from NP.selectedIds.size (keeps 4, ignores per-platform 2).
+  NP.export.total = Math.max(NP.export.total || 0, data.total || 0);
+
+  // In multi-platform runs each progress-update only carries ONE platform's counters.
+  // npSyncProjectDone already tracks completed/success/noDm cumulatively, so
+  // overwriting here would reset the cross-platform totals to a single platform's values.
+  if (!NP._multiPlatform) {
+    NP.export.completed = data.completed || 0;
+    NP.export.success   = r.success || r.Success || 0;
+    var serverNoDm = r.no_dm || r.noDm || r.NoDm || 0;
+    if (serverNoDm > (NP.export.noDm || 0)) {
+      NP.export.noDm = serverNoDm;
+      _npSetNoDm(NP.export.noDm);
+    }
+  }
+  if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
+}
+
+function npSyncProjectDone(data) {
+  var status = data.status;
+
+  NP.export.completed = (NP.export.completed || 0) + 1;
+  if (status === 'success') NP.export.success = (NP.export.success || 0) + 1;
+  if (status === 'no_dm') {
+    NP.export.noDm = (NP.export.noDm || 0) + 1;
+    console.log('[NP] no_dm project done, noDm count now:', NP.export.noDm);
+    _npSetNoDm(NP.export.noDm);
+  }
+  if (status === 'access_denied') {
+    NP.export.accessDenied = (NP.export.accessDenied || 0) + 1;
+  }
+
+  var pid  = data.project && (data.project.id || data.project.name);
+  var proj = pid && NP.projects.find(function(p) { return p.id === pid || p.name === pid; });
+  if (proj) {
+    proj.files     = (data.totalFiles > 0) ? Number(data.totalFiles).toLocaleString() : '—';
+    proj.size      = data.totalSizeFormatted || '—';
+    proj.sizeBytes = data.totalSizeBytes || 0;
+    proj.status    = status;
+  }
+
+  if (NP.step === 4 && typeof npUpdateExport === 'function') npUpdateExport();
+  if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
+}
+
+// Dedicated helper — updates every element that shows the no_dm count
+function _npSetNoDm(count) {
+  var val = String(count || 0);
+  // querySelectorAll so duplicate IDs (if any) are all updated
+  document.querySelectorAll('#np-nodm').forEach(function(el) {
+    el.textContent = val;
+    console.log('[NP] set #np-nodm to', val, el);
+  });
+  // Also cover the badge on the EXEMPT card directly
+  document.querySelectorAll('[data-nodm-badge]').forEach(function(el) {
+    el.textContent = val;
+  });
+}
+
+function npSyncComplete() {
+  // Track how many platforms have completed in a multi-platform wizard run
+  if (NP._multiPlatform) {
+    NP._pendingPlatforms = Math.max(0, (NP._pendingPlatforms || 1) - 1);
+    if (NP._pendingPlatforms > 0) {
+      // Other platform still running — update progress but don't mark overall done yet
+      if (typeof npUpdateExport === 'function') npUpdateExport();
+      return;
+    }
+    NP._multiPlatform = false;
+  }
+  if (NP.step !== 4) return;
+  NP.export.running = false;
+  if (typeof npUpdateExport === 'function') npUpdateExport();
+  var bf = document.getElementById('np-btn-finalize');
+  if (bf) bf.disabled = false;
+  if (typeof npSetOverall === 'function') npSetOverall(100, 'COMPLETE');
+}
+
+function npSyncFileSummary(projectId, files, size) {
+  var proj = NP.projects.find(function(p) { return p.id === projectId || p.name === projectId; });
+  if (proj) { proj.files = files; proj.size = size; }
+  if (NP.step === 5 && typeof npRenderResults === 'function') npRenderResults();
+}
+
+function npPickPlat(p){
+  NP.platform=p;
+  document.querySelectorAll('.np-plat-opt').forEach(function(el){
+    var sel=el.dataset.plat===p;el.classList.toggle('np-plat-sel',sel);
+    var chk=document.getElementById('np-chk-'+el.dataset.plat);if(chk)chk.classList.toggle('hidden',!sel);
+  });
+}
+
+async function npLoadProjects(){
+  try{
+    var results=await Promise.all([
+      fetch('/api/acc/projects').then(function(r){return r.json();}).catch(function(){return{projects:[],adminUrl:'',adminUrlConfigured:false};}),
+      fetch('/api/bim360/projects').then(function(r){return r.json();}).catch(function(){return{projects:[],adminUrl:'',adminUrlConfigured:false};})
+    ]);
+    var accData=results[0],bimData=results[1];
+    var banner=document.getElementById('np-admin-banner'),inp=document.getElementById('np-url-input');
+    if(banner)banner.classList.toggle('hidden',!!(accData.adminUrlConfigured||bimData.adminUrlConfigured));
+    if(inp&&!inp.value)inp.value=accData.adminUrl||bimData.adminUrl||'';
+    var seen=new Set();NP.projects=[];
+    (accData.projects||[]).forEach(function(p){var q=Object.assign({},p,{platform:p.rawPlatform==='bim360'?'bim360':'acc'});if(!seen.has(q.id)){seen.add(q.id);NP.projects.push(q);}});
+    (bimData.projects||[]).forEach(function(p){var q=Object.assign({},p,{platform:'bim360'});if(!seen.has(q.id)){seen.add(q.id);NP.projects.push(q);}});
+    npRenderTable();
+  }catch(e){if(typeof showToast!=='undefined')showToast('Failed to load: '+e.message,'error');}
+}
+async function npSaveAndDiscover(){
+  var inp=document.getElementById('np-url-input');
+  var url=(inp?inp.value:'').trim();
+  if(!url){if(typeof showToast!=='undefined')showToast('Please enter a URL.','warning');return;}
+  var isAcc=url.indexOf('acc.autodesk.com')>=0,isBim=url.indexOf('b360.autodesk.com')>=0;
+  var plat=isAcc?'acc':isBim?'bim360':'acc';
+  try{
+    await fetch('/api/'+plat+'/admin-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url})});
+    if(typeof showToast!=='undefined')showToast('URL saved — discovering...','success');
+    if(NP.platform!=='bim360')fetch('/api/acc/projects/discover',{method:'POST'}).catch(function(){});
+    if(NP.platform!=='acc')fetch('/api/bim360/projects/discover',{method:'POST'}).catch(function(){});
+  }catch(e){if(typeof showToast!=='undefined')showToast('Error: '+e.message,'error');}
+}
+function npSetTab(btn,tab){
+  NP.filterTab=tab;
+  document.querySelectorAll('.np-ftab').forEach(function(b){b.classList.toggle('np-ftab-active',b.dataset.tab===tab);});
+  npRenderTable();
+}
+function npRenderTable(){
+  var tbody=document.getElementById('np-tbody'),empty=document.getElementById('np-empty');
+  var search=(document.getElementById('np-proj-search')?document.getElementById('np-proj-search').value:'').toLowerCase();
+  var list=NP.projects.filter(function(p){
+    if(NP.filterTab==='bim360'&&p.platform!=='bim360')return false;
+    if(NP.filterTab==='acc'&&p.platform!=='acc')return false;
+    if(search&&p.name.toLowerCase().indexOf(search)<0)return false;
+    return true;
+  });
+  if(!list.length){if(tbody)tbody.innerHTML='';if(empty)empty.classList.remove('hidden');npUpdateSel();return;}
+  if(empty)empty.classList.add('hidden');
+  var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  if(tbody)tbody.innerHTML=list.map(function(p){
+    var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
+    var last=p.status==='completed'?'Previously exported':'Never';
+    return '<tr><td style="text-align:center"><input type="checkbox" '+(NP.selectedIds.has(p.id)?'checked':'')+' data-id="'+e2(p.id)+'" onchange="npCheck(this)"></td><td>'+e2(p.name)+'</td><td>'+badge+'</td><td style="font-size:13px;color:#64748b">'+last+'</td></tr>';
+  }).join('');
+  npUpdateSel();
+}
+function npCheck(cb){if(cb.checked)NP.selectedIds.add(cb.dataset.id);else NP.selectedIds.delete(cb.dataset.id);npUpdateSel();}
+function npToggleAll(checked){
+  NP.projects.filter(function(p){
+    if(NP.filterTab==='bim360'&&p.platform!=='bim360')return false;
+    if(NP.filterTab==='acc'&&p.platform!=='acc')return false;return true;
+  }).forEach(function(p){if(checked)NP.selectedIds.add(p.id);else NP.selectedIds.delete(p.id);});
+  npRenderTable();
+}
+function npUpdateSel(){
+  var n=NP.selectedIds.size,el=document.getElementById('np-sel-count');
+  if(el)el.textContent=n+' project'+(n!==1?'s':'')+' selected';
+  var btn=document.getElementById('np-btn-export');if(btn)btn.disabled=n===0;
+}
+async function npStartExport(){
+  if(!NP.selectedIds.size){if(typeof showToast!=='undefined')showToast('Select at least one project.','warning');return;}
+  NP._startingExport=true;
+  npGoStep(4);
+  var ids=Array.from(NP.selectedIds);
+  var accIds=NP.projects.filter(function(p){return p.platform!=='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
+  var bimIds=NP.projects.filter(function(p){return p.platform==='bim360'&&ids.indexOf(p.id)>=0;}).map(function(p){return p.id;});
+  var startingAcc=(accIds.length&&NP.platform!=='bim360');
+  var startingBim=(bimIds.length&&NP.platform!=='acc');
+  // Flag multi-platform run so export-start doesn't wipe the first platform's data
+  NP._multiPlatform = !!(startingAcc && startingBim);
+  NP._pendingPlatforms = (startingAcc?1:0)+(startingBim?1:0);
+  try{
+    if(startingAcc)await fetch('/api/acc/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:accIds})});
+    if(startingBim)await fetch('/api/bim360/export/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({projectIds:bimIds})});
+    NP.export.total=ids.length;npUpdateExport();
+  }catch(e){if(typeof showToast!=='undefined')showToast('Export start failed: '+e.message,'error');}
+}
+function npOnEnterExport(){
+  if(NP._startingExport){
+    NP._startingExport=false;
+    NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0,accessDenied:0};
+    // Clear stale file data from previous run so results table shows fresh values
+    NP.projects.forEach(function(p){ delete p.files; delete p.size; delete p.status; });
+    var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;
+  }
+  npUpdateExport();
+}
+function npUpdateExport(){
+  var c=NP.export,pct=c.total>0?Math.min(100,Math.round(c.completed/c.total*100)):0;
+  var rmax=Math.max(1,c.total-c.noDm-(c.accessDenied||0)),rpct=Math.min(100,Math.round(c.success/rmax*100));
+  var fe=document.getElementById('np-fetched');if(fe)fe.textContent=c.completed+'/'+c.total;
+  var ff=document.getElementById('np-fill-fetch');if(ff)ff.style.width=pct+'%';
+  var bf=document.getElementById('np-badge-fetch');if(bf){bf.className='np-exp-badge '+(c.running?'np-processing':'np-done-badge');bf.textContent=c.running?'PROCESSING':'DONE';}
+  _npSetNoDm(c.noDm);
+  var ad=document.getElementById('np-access-denied');if(ad)ad.textContent=String(c.accessDenied||0);
+  var re=document.getElementById('np-reports');if(re)re.textContent=c.success+'/'+rmax;
+  var rf=document.getElementById('np-fill-rep');if(rf)rf.style.width=rpct+'%';
+  var br=document.getElementById('np-badge-rep');if(br){br.className='np-exp-badge '+(c.running?'np-finalizing':'np-done-badge');br.textContent=c.running?'FINALIZING':'DONE';}
+  npSetOverall(pct,c.running?(pct>=80?'SYNCING FINAL MANIFEST':'PROCESSING'):'COMPLETE');
+}
+function npSetOverall(pct,label){
+  var of=document.getElementById('np-overall-fill');if(of)of.style.width=pct+'%';
+  var ol=document.getElementById('np-overall-lbl');if(ol)ol.textContent=label;
+  var op=document.getElementById('np-overall-pct');if(op)op.textContent=pct+'%';
+  var active=label!=='COMPLETE';
+  var bar=document.getElementById('np-overall-bar-wrap');if(bar)bar.classList.toggle('np-bar-active',active);
+  var dot=document.getElementById('np-overall-dot');if(dot)dot.classList.toggle('np-dot-hidden',!active);
+}
+function _npFormatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '—';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+  if (bytes >= 1048576)    return (bytes / 1048576).toFixed(1)    + ' MB';
+  if (bytes >= 1024)       return (bytes / 1024).toFixed(1)       + ' KB';
+  return bytes + ' B';
+}
+function _npTotalSizeBytes() {
+  var total = 0;
+  NP.projects.forEach(function(p) {
+    if (!NP.selectedIds.has(p.id)) return;
+    var ps = A.projStatuses && A.projStatuses[p.id];
+    var bytes = (ps && ps.sizeBytes) || p.sizeBytes || 0;
+    total += bytes;
+  });
+  return total;
+}
+function npOnEnterResults(){
+  var s=NP.export.success,el=document.getElementById('np-res-total');
+  if(el)el.textContent=s+' project'+(s!==1?'s':'')+' exported';
+  var se=document.getElementById('np-res-size-total');
+  if(se)se.textContent=_npFormatBytes(_npTotalSizeBytes());
+  npRenderResults();
+}
+function npRenderResults(){
+  var tbody=document.getElementById('np-res-tbody');if(!tbody)return;
+  var se2=document.getElementById('np-res-size-total');
+  if(se2)se2.textContent=_npFormatBytes(_npTotalSizeBytes());
+  var search=(document.getElementById('np-res-search')?document.getElementById('np-res-search').value:'').toLowerCase();
+  var filter=document.getElementById('np-res-filter')?document.getElementById('np-res-filter').value:'all';
+  var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');};
+  var list=NP.projects.filter(function(p){
+    if(!NP.selectedIds.has(p.id))return false;
+    if(filter==='acc'&&p.platform!=='acc')return false;
+    if(filter==='bim360'&&p.platform!=='bim360')return false;
+    if(search&&p.name.toLowerCase().indexOf(search)<0)return false;return true;
+  });
+  if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
+  tbody.innerHTML=list.map(function(p){
+    var platBadge = p.platform==='bim360'
+      ? '<span class="np-badge-bim360">BIM360</span>'
+      : '<span class="np-badge-acc">ACC</span>';
+
+    // A.projStatuses always has the freshest data from the current run.
+    // p.files/p.size may be stale from a previous run — use as last resort only.
+    var ps     = A.projStatuses && A.projStatuses[p.id];
+    var files  = (ps && ps.files)  || p.files  || '—';
+    var size   = (ps && ps.size)   || p.size   || '—';
+    var status = (ps && ps.status) || p.status || '';
+
+    var statusBadge = status === 'success'
+      ? '<span style="background:#dcfce7;color:#16a34a;font-weight:700;font-size:11px;padding:2px 8px;border-radius:99px">Done</span>'
+      : status === 'no_dm'
+        ? '<span style="background:#fef9c3;color:#a16207;font-size:11px;padding:2px 8px;border-radius:99px">No DM</span>'
+        : status === 'access_denied'
+          ? '<span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:99px">Access Denied</span>'
+          : status === 'failed'
+            ? '<span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:99px">Failed</span>'
+            : '<span style="background:#f1f5f9;color:#94a3b8;font-size:11px;padding:2px 8px;border-radius:99px">Pending</span>';
+
+    return '<tr>'
+      +'<td style="font-weight:500;color:#1e293b">'+e2(p.name)+'</td>'
+      +'<td>'+platBadge+'</td>'
+      +'<td>'+statusBadge+'</td>'
+      +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(files)+'</td>'
+      +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(size)+'</td>'
+      +'</tr>';
+  }).join('');
+}
+function npDownloadReport() {
+  var statusLabel = { success:'Done', no_dm:'No DM', access_denied:'Access Denied', failed:'Failed' };
+  var rows = [['Project Name','Platform','Status','File Count','File Size']];
+  NP.projects.forEach(function(p) {
+    if (!NP.selectedIds.has(p.id)) return;
+    var ps     = A.projStatuses && A.projStatuses[p.id];
+    var files  = (ps && ps.files)  || p.files  || '—';
+    var size   = (ps && ps.size)   || p.size   || '—';
+    var status = (ps && ps.status) || p.status || '';
+    var plat   = p.platform === 'bim360' ? 'BIM360' : 'ACC';
+    rows.push([p.name, plat, statusLabel[status] || status || 'Pending', files, size]);
+  });
+  var csv = rows.map(function(r) {
+    return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'export-report-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+async function npResetCheckpoint() {
+  var platforms = NP.platform === 'acc' ? ['acc']
+                : NP.platform === 'bim360' ? ['bim360']
+                : ['acc', 'bim360'];
+
+  var platLabel = platforms.join(' + ').toUpperCase();
+  if (!confirm('Reset all export progress for ' + platLabel + '?\n\nAll completed projects will be marked as pending and re-exported on the next run.')) return;
+
+  var btn = document.getElementById('np-btn-reset-cp');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+
+  try {
+    await Promise.all(platforms.map(function(p) {
+      return fetch('/api/' + p + '/checkpoint', { method: 'DELETE' });
+    }));
+    // SSE 'checkpoint-reset' will fire and reload projects via npLoadProjects
+    // But also reload directly here as a safety net
+    setTimeout(npLoadProjects, 800);
+    if (typeof showToast !== 'undefined') showToast('Checkpoint reset for ' + platLabel + '.', 'info');
+  } catch(e) {
+    if (typeof showToast !== 'undefined') showToast('Reset failed: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 20 20" fill="currentColor" width="14"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg> Reset Checkpoint';
+    }
+  }
+}
+
+function npReset(){
+  NP.selectedIds.clear();NP.projects=[];
+  NP.export={running:false,completed:0,total:0,noDm:0,success:0,accessDenied:0};
+  npGoStep(1);npShowIdle();
+}

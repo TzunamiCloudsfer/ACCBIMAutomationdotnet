@@ -265,11 +265,14 @@ function handleEvent(type, data) {
           // Sync NP wizard counters so the "Projects without data management" card updates on reconnect
           const serverNoDm = A.results.no_dm;
           if (serverNoDm > (NP.export.noDm || 0)) NP.export.noDm = serverNoDm;
-          NP.export.success   = A.results.success;
-          NP.export.completed = A.progress.completed;
-          NP.export.total     = Math.max(NP.export.total || 0, A.progress.total || 0);
+          NP.export.success      = A.results.success;
+          NP.export.completed    = A.progress.completed;
+          NP.export.total        = Math.max(NP.export.total || 0, A.progress.total || 0);
+          NP.export.accessDenied = Object.values(A.projStatuses || {}).filter(function(s){ return s.status === 'access_denied'; }).length;
           const noDmEl = document.getElementById('np-nodm');
           if (noDmEl) noDmEl.textContent = String(NP.export.noDm);
+          const adEl = document.getElementById('np-access-denied');
+          if (adEl) adEl.textContent = String(NP.export.accessDenied);
         }
         A.projStatuses = liveData?.projectStatuses || {};
         A.exportStatus = liveData?.exportStatus || 'idle';
@@ -1473,14 +1476,15 @@ function upsertPSI(id, status, name, error) {
     list.appendChild(el);
   }
   el.className = 'psi-row' + (status === 'exporting' ? ' psi-row-current' : '');
-  const badgeClass = { pending: 'badge-pending', exporting: 'badge-warn', success: 'badge-completed', failed: 'badge-failed', no_dm: 'badge-muted', skipped: 'badge-muted' }[status] || 'badge-pending';
+  const badgeClass = { pending: 'badge-pending', exporting: 'badge-warn', success: 'badge-completed', failed: 'badge-failed', no_dm: 'badge-muted', skipped: 'badge-muted', access_denied: 'badge-failed' }[status] || 'badge-pending';
   const badgeLabel = {
-    pending:   '⏳ Pending',
-    exporting: '<span class="spinner-sm" style="width:9px;height:9px;border-width:1.5px"></span> Processing…',
-    success:   '✓ Done',
-    failed:    '✗ ' + trunc(error || 'Failed', 22),
-    no_dm:     '⊘ No DM',
-    skipped:   '↷ Skipped',
+    pending:       '⏳ Pending',
+    exporting:     '<span class="spinner-sm" style="width:9px;height:9px;border-width:1.5px"></span> Processing…',
+    success:       '✓ Done',
+    failed:        '✗ ' + trunc(error || 'Failed', 22),
+    no_dm:         '⊘ No DM',
+    skipped:       '↷ Skipped',
+    access_denied: '⊘ Access Denied',
   }[status] || status;
 
   // Read files/size from state (more reliable than reading from DOM cells)
@@ -2235,7 +2239,7 @@ const NP = {
   step:1, platform:'both',
   projects:[], selectedIds:new Set(), filterTab:'all',
   loginStart:null, loginTimer:null,
-  export:{running:false,completed:0,total:0,noDm:0,success:0},
+  export:{running:false,completed:0,total:0,noDm:0,success:0,accessDenied:0},
   _multiPlatform:false, _pendingPlatforms:0,
 };
 
@@ -2332,6 +2336,9 @@ function npSyncProjectDone(data) {
     NP.export.noDm = (NP.export.noDm || 0) + 1;
     console.log('[NP] no_dm project done, noDm count now:', NP.export.noDm);
     _npSetNoDm(NP.export.noDm);
+  }
+  if (status === 'access_denied') {
+    NP.export.accessDenied = (NP.export.accessDenied || 0) + 1;
   }
 
   var pid  = data.project && (data.project.id || data.project.name);
@@ -2481,7 +2488,7 @@ async function npStartExport(){
 function npOnEnterExport(){
   if(NP._startingExport){
     NP._startingExport=false;
-    NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0};
+    NP.export={running:true,completed:0,total:NP.selectedIds.size,noDm:0,success:0,accessDenied:0};
     // Clear stale file data from previous run so results table shows fresh values
     NP.projects.forEach(function(p){ delete p.files; delete p.size; delete p.status; });
     var bf=document.getElementById('np-btn-finalize');if(bf)bf.disabled=true;
@@ -2490,11 +2497,12 @@ function npOnEnterExport(){
 }
 function npUpdateExport(){
   var c=NP.export,pct=c.total>0?Math.min(100,Math.round(c.completed/c.total*100)):0;
-  var rmax=Math.max(1,c.total-c.noDm),rpct=Math.min(100,Math.round(c.success/rmax*100));
+  var rmax=Math.max(1,c.total-c.noDm-(c.accessDenied||0)),rpct=Math.min(100,Math.round(c.success/rmax*100));
   var fe=document.getElementById('np-fetched');if(fe)fe.textContent=c.completed+'/'+c.total;
   var ff=document.getElementById('np-fill-fetch');if(ff)ff.style.width=pct+'%';
   var bf=document.getElementById('np-badge-fetch');if(bf){bf.className='np-exp-badge '+(c.running?'np-processing':'np-done-badge');bf.textContent=c.running?'PROCESSING':'DONE';}
   _npSetNoDm(c.noDm);
+  var ad=document.getElementById('np-access-denied');if(ad)ad.textContent=String(c.accessDenied||0);
   var re=document.getElementById('np-reports');if(re)re.textContent=c.success+'/'+rmax;
   var rf=document.getElementById('np-fill-rep');if(rf)rf.style.width=rpct+'%';
   var br=document.getElementById('np-badge-rep');if(br){br.className='np-exp-badge '+(c.running?'np-finalizing':'np-done-badge');br.textContent=c.running?'FINALIZING':'DONE';}
@@ -2545,7 +2553,7 @@ function npRenderResults(){
     if(filter==='bim360'&&p.platform!=='bim360')return false;
     if(search&&p.name.toLowerCase().indexOf(search)<0)return false;return true;
   });
-  if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
+  if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
   tbody.innerHTML=list.map(function(p){
     var platBadge = p.platform==='bim360'
       ? '<span class="np-badge-bim360">BIM360</span>'
@@ -2559,20 +2567,48 @@ function npRenderResults(){
     var status = (ps && ps.status) || p.status || '';
 
     var statusBadge = status === 'success'
-      ? '<span style="color:#16a34a;font-weight:700;font-size:11px">✓ Done</span>'
+      ? '<span style="background:#dcfce7;color:#16a34a;font-weight:700;font-size:11px;padding:2px 8px;border-radius:99px">Done</span>'
       : status === 'no_dm'
-        ? '<span style="color:#d97706;font-size:11px">⊘ No DM</span>'
-        : status === 'failed'
-          ? '<span style="color:#dc2626;font-size:11px">✗ Failed</span>'
-          : '<span style="color:#94a3b8;font-size:11px">—</span>';
+        ? '<span style="background:#fef9c3;color:#a16207;font-size:11px;padding:2px 8px;border-radius:99px">No DM</span>'
+        : status === 'access_denied'
+          ? '<span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:99px">Access Denied</span>'
+          : status === 'failed'
+            ? '<span style="background:#fee2e2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:99px">Failed</span>'
+            : '<span style="background:#f1f5f9;color:#94a3b8;font-size:11px;padding:2px 8px;border-radius:99px">Pending</span>';
 
     return '<tr>'
       +'<td style="font-weight:500;color:#1e293b">'+e2(p.name)+'</td>'
       +'<td>'+platBadge+'</td>'
+      +'<td>'+statusBadge+'</td>'
       +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(files)+'</td>'
       +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(size)+'</td>'
       +'</tr>';
   }).join('');
+}
+function npDownloadReport() {
+  var statusLabel = { success:'Done', no_dm:'No DM', access_denied:'Access Denied', failed:'Failed' };
+  var rows = [['Project Name','Platform','Status','File Count','File Size']];
+  NP.projects.forEach(function(p) {
+    if (!NP.selectedIds.has(p.id)) return;
+    var ps     = A.projStatuses && A.projStatuses[p.id];
+    var files  = (ps && ps.files)  || p.files  || '—';
+    var size   = (ps && ps.size)   || p.size   || '—';
+    var status = (ps && ps.status) || p.status || '';
+    var plat   = p.platform === 'bim360' ? 'BIM360' : 'ACC';
+    rows.push([p.name, plat, statusLabel[status] || status || 'Pending', files, size]);
+  });
+  var csv = rows.map(function(r) {
+    return r.map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'export-report-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 async function npResetCheckpoint() {
   var platforms = NP.platform === 'acc' ? ['acc']
@@ -2605,6 +2641,6 @@ async function npResetCheckpoint() {
 
 function npReset(){
   NP.selectedIds.clear();NP.projects=[];
-  NP.export={running:false,completed:0,total:0,noDm:0,success:0};
+  NP.export={running:false,completed:0,total:0,noDm:0,success:0,accessDenied:0};
   npGoStep(1);npShowIdle();
 }

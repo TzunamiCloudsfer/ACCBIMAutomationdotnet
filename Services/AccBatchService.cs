@@ -231,6 +231,15 @@ namespace AutodeskAutomation.Services
                     db.MarkNoDm(opts.UserEmail, "acc", project);
                     results.NoDm++;
                 }
+                else if (result.Status == "access_denied")
+                {
+                    db.MarkNoDm(opts.UserEmail, "acc", project); // skip on next run — do NOT count in NoDm stat
+
+                    sse.Broadcast("log", new { level = "WARN",
+                        timestamp = DateTime.UtcNow.ToString("O"),
+                        message = $"[ACC] {project.Name} — Access denied: cannot view folder. Contact project administrator.",
+                        platform = "acc" });
+                }
                 else
                 {
                     results.Failed++;
@@ -297,10 +306,10 @@ namespace AutodeskAutomation.Services
             }
             catch (Exception ex)
             {
-                if(ex.Message.Equals("link not found"))
-                {
+                if (ex.Message.Equals("link not found"))
                     return new ExportResult { Status = "no_dm", Duration = (DateTime.UtcNow - start).TotalMilliseconds };
-                }
+                if (ex.Message.Equals("access denied"))
+                    return new ExportResult { Status = "access_denied", Duration = (DateTime.UtcNow - start).TotalMilliseconds };
                 return new ExportResult { Status = "failed", Error = ex.Message,
                     Duration = (DateTime.UtcNow - start).TotalMilliseconds };
             }

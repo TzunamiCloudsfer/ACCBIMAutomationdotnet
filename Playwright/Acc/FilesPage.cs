@@ -13,8 +13,14 @@ namespace AutodeskAutomation.Playwright.Acc
 
         public async Task OpenProjectFiles()
         {
-            // We're already on the files page after navigation — clicking "Project Files" in
-            // the nav is optional. If it times out or isn't present, just proceed to export.
+            // Check for the "Can't view folder" access-denied state before interacting.
+            // This appears when the authenticated user lacks permission to view the project.
+            var bodyText = await _page.EvaluateAsync<string>(
+                "document.body ? document.body.innerText : ''");
+            if (!string.IsNullOrEmpty(bodyText) &&
+                bodyText.Contains("It may have been deleted or you don't have permission"))
+                throw new Exception("access denied");
+
             try
             {
                 var projectFiles = _page.GetByRole(AriaRole.Link, new() { Name = "Project Files" })
@@ -23,11 +29,18 @@ namespace AutodeskAutomation.Playwright.Acc
                     { State = WaitForSelectorState.Visible, Timeout = 5_000 });
                 await projectFiles.ClickAsync();
                 await Task.Delay(2000);
+
             }
             catch
             {
+
+                // Check again after clicking — the folder content area can also show the error
+                bodyText = await _page.EvaluateAsync<string>(
+                    "document.body ? document.body.innerText : ''");
+                if (!string.IsNullOrEmpty(bodyText) &&
+                    bodyText.Contains("You don't have access to any folders. Contact your project administrator."))
+                    throw new Exception("access denied");
                 throw new Exception("link not found");
-                // Link not found or click failed — we're already on the files page, proceed
             }
         }
     }
