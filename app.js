@@ -2234,6 +2234,8 @@ document.addEventListener('DOMContentLoaded', () => {
 const NP = {
   step:1, platform:'both',
   projects:[], selectedIds:new Set(), filterTab:'all',
+  page:1, pageSize:10,
+  resPage:1, resPageSize:10,
   loginStart:null, loginTimer:null,
   export:{running:false,completed:0,total:0,noDm:0,success:0},
   _multiPlatform:false, _pendingPlatforms:0,
@@ -2425,6 +2427,7 @@ async function npSaveAndDiscover(){
 }
 function npSetTab(btn,tab){
   NP.filterTab=tab;
+  NP.page=1;
   document.querySelectorAll('.np-ftab').forEach(function(b){b.classList.toggle('np-ftab-active',b.dataset.tab===tab);});
   npRenderTable();
 }
@@ -2437,16 +2440,37 @@ function npRenderTable(){
     if(search&&p.name.toLowerCase().indexOf(search)<0)return false;
     return true;
   });
-  if(!list.length){if(tbody)tbody.innerHTML='';if(empty)empty.classList.remove('hidden');npUpdateSel();return;}
+  if(!list.length){if(tbody)tbody.innerHTML='';if(empty)empty.classList.remove('hidden');npUpdateSel();npRenderPagination(0,0);return;}
   if(empty)empty.classList.add('hidden');
+  var total=list.length,totalPages=Math.max(1,Math.ceil(total/NP.pageSize));
+  NP.page=Math.max(1,Math.min(NP.page,totalPages));
+  var start=(NP.page-1)*NP.pageSize,paged=list.slice(start,start+NP.pageSize);
   var e2=function(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
-  if(tbody)tbody.innerHTML=list.map(function(p){
+  if(tbody)tbody.innerHTML=paged.map(function(p){
     var badge=p.platform==='bim360'?'<span class="np-badge-bim360">BIM360</span>':'<span class="np-badge-acc">ACC</span>';
     var last=p.status==='completed'?'Previously exported':'Never';
     return '<tr><td style="text-align:center"><input type="checkbox" '+(NP.selectedIds.has(p.id)?'checked':'')+' data-id="'+e2(p.id)+'" onchange="npCheck(this)"></td><td>'+e2(p.name)+'</td><td>'+badge+'</td><td style="font-size:13px;color:#64748b">'+last+'</td></tr>';
   }).join('');
   npUpdateSel();
+  npRenderPagination(total,totalPages);
 }
+function npRenderPagination(total,totalPages){
+  var wrap=document.getElementById('np-pagination');
+  if(!wrap)return;
+  if(totalPages<=1){wrap.innerHTML='';return;}
+  var cur=NP.page,html='';
+  html+='<span class="np-page-info">'+total+' projects &nbsp;·&nbsp; Page '+cur+' of '+totalPages+'</span>';
+  html+='<div class="np-page-btns">';
+  html+='<button class="np-page-btn" onclick="npGoPage(1)" '+(cur===1?'disabled':'')+' title="First">&#171;</button>';
+  html+='<button class="np-page-btn" onclick="npGoPage('+(cur-1)+')" '+(cur===1?'disabled':'')+' title="Previous">&#8249;</button>';
+  var from=Math.max(1,cur-2),to=Math.min(totalPages,cur+2);
+  for(var i=from;i<=to;i++){html+='<button class="np-page-btn'+(i===cur?' np-page-btn-active':'')+'" onclick="npGoPage('+i+')">'+i+'</button>';}
+  html+='<button class="np-page-btn" onclick="npGoPage('+(cur+1)+')" '+(cur===totalPages?'disabled':'')+' title="Next">&#8250;</button>';
+  html+='<button class="np-page-btn" onclick="npGoPage('+totalPages+')" '+(cur===totalPages?'disabled':'')+' title="Last">&#187;</button>';
+  html+='</div>';
+  wrap.innerHTML=html;
+}
+function npGoPage(n){NP.page=n;npRenderTable();}
 function npCheck(cb){if(cb.checked)NP.selectedIds.add(cb.dataset.id);else NP.selectedIds.delete(cb.dataset.id);npUpdateSel();}
 function npToggleAll(checked){
   NP.projects.filter(function(p){
@@ -2545,8 +2569,11 @@ function npRenderResults(){
     if(filter==='bim360'&&p.platform!=='bim360')return false;
     if(search&&p.name.toLowerCase().indexOf(search)<0)return false;return true;
   });
-  if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';return;}
-  tbody.innerHTML=list.map(function(p){
+  if(!list.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;padding:32px;color:#64748b">No results.</td></tr>';npRenderResPagination(0,0);return;}
+  var total=list.length,totalPages=Math.max(1,Math.ceil(total/NP.resPageSize));
+  NP.resPage=Math.max(1,Math.min(NP.resPage,totalPages));
+  var start=(NP.resPage-1)*NP.resPageSize,paged=list.slice(start,start+NP.resPageSize);
+  tbody.innerHTML=paged.map(function(p){
     var platBadge = p.platform==='bim360'
       ? '<span class="np-badge-bim360">BIM360</span>'
       : '<span class="np-badge-acc">ACC</span>';
@@ -2573,7 +2600,25 @@ function npRenderResults(){
       +'<td style="font-family:monospace;font-size:13px;text-align:right;padding-right:16px">'+e2(size)+'</td>'
       +'</tr>';
   }).join('');
+  npRenderResPagination(total,totalPages);
 }
+function npRenderResPagination(total,totalPages){
+  var wrap=document.getElementById('np-res-pagination');
+  if(!wrap)return;
+  if(totalPages<=1){wrap.innerHTML='';return;}
+  var cur=NP.resPage,html='';
+  html+='<span class="np-page-info">'+total+' projects &nbsp;·&nbsp; Page '+cur+' of '+totalPages+'</span>';
+  html+='<div class="np-page-btns">';
+  html+='<button class="np-page-btn" onclick="npGoResPage(1)" '+(cur===1?'disabled':'')+' title="First">&#171;</button>';
+  html+='<button class="np-page-btn" onclick="npGoResPage('+(cur-1)+')" '+(cur===1?'disabled':'')+' title="Previous">&#8249;</button>';
+  var from=Math.max(1,cur-2),to=Math.min(totalPages,cur+2);
+  for(var i=from;i<=to;i++){html+='<button class="np-page-btn'+(i===cur?' np-page-btn-active':'')+'" onclick="npGoResPage('+i+')">'+i+'</button>';}
+  html+='<button class="np-page-btn" onclick="npGoResPage('+(cur+1)+')" '+(cur===totalPages?'disabled':'')+' title="Next">&#8250;</button>';
+  html+='<button class="np-page-btn" onclick="npGoResPage('+totalPages+')" '+(cur===totalPages?'disabled':'')+' title="Last">&#187;</button>';
+  html+='</div>';
+  wrap.innerHTML=html;
+}
+function npGoResPage(n){NP.resPage=n;npRenderResults();}
 async function npResetCheckpoint() {
   var platforms = NP.platform === 'acc' ? ['acc']
                 : NP.platform === 'bim360' ? ['bim360']
