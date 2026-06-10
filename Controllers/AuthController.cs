@@ -19,12 +19,18 @@ namespace AutodeskAutomation.Controllers
         [HttpGet, Route("me")]
         public IHttpActionResult Me()
         {
-            var cookies = CookieHelper.ParseCookies(Request);
-            cookies.TryGetValue("cloudsfer_session", out var token);
-            var session = _db.GetAppSession(token);
-            if (session != null)
-                return Ok(new { authenticated = true, email = session.UserEmail });
-            return Ok(new { authenticated = false, email = (string?)null });
+            // Cloudsfer sign-in is no longer required — always authenticated.
+            // Restore the last known active user so project data is accessible on startup.
+            if (_srv.ActiveUser == null)
+            {
+                var lastUser = _db.GetLastUser();
+                if (!string.IsNullOrEmpty(lastUser))
+                {
+                    _srv.ActiveUser     = lastUser;
+                    _srv.ActiveUserSlug = SlugHelper.EmailToSlug(lastUser);
+                }
+            }
+            return Ok(new { authenticated = true, email = _srv.ActiveUser ?? "local" });
         }
 
         [HttpPost, Route("signup")]

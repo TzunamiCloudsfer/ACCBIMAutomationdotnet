@@ -10,7 +10,51 @@
     <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
-  
+
+  <!-- ══ Cloudsfer auth overlay — shown until user signs in ══════════════════ -->
+  <div id="auth-overlay" class="auth-overlay" style="display:none">
+    <div class="auth-card">
+      <div class="auth-logo-wrap">
+        <span style="font-size:22px;font-weight:800;color:#1a3d7c;letter-spacing:-0.5px">Cloudsfer</span>
+      </div>
+      <div class="auth-tabs">
+        <button id="tab-signin" class="auth-tab-btn active" onclick="showAuthTab('signin')">Sign In</button>
+        <button id="tab-create" class="auth-tab-btn" onclick="showAuthTab('create')">Create Account</button>
+      </div>
+      <form id="form-signin" class="auth-form" onsubmit="handleLogin(event)">
+        <div id="signin-error" class="auth-msg-err hidden"></div>
+        <div id="signin-success" class="auth-msg-ok hidden"></div>
+        <div class="auth-field">
+          <label class="auth-label" for="signin-email">Email</label>
+          <input id="signin-email" class="auth-input" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="signin-password">Password</label>
+          <input id="signin-password" class="auth-input" type="password" placeholder="Enter password" autocomplete="current-password" required>
+        </div>
+        <button id="btn-signin-submit" class="np-btn-primary auth-submit-btn" type="submit">Sign In</button>
+      </form>
+      <form id="form-create" class="auth-form hidden" onsubmit="handleSignup(event)">
+        <div id="create-error" class="auth-msg-err hidden"></div>
+        <div class="auth-field">
+          <label class="auth-label" for="create-email">Email</label>
+          <input id="create-email" class="auth-input" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="create-password">Password</label>
+          <input id="create-password" class="auth-input" type="password" placeholder="Create password" autocomplete="new-password" required>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label" for="create-confirm">Confirm Password</label>
+          <input id="create-confirm" class="auth-input" type="password" placeholder="Confirm password" autocomplete="new-password" required>
+        </div>
+        <button id="btn-create-submit" class="np-btn-primary auth-submit-btn" type="submit">Create Account</button>
+      </form>
+      <div class="auth-footer-brand">Cloudsfer &mdash; Autodesk Document Export</div>
+    </div>
+  </div>
+  <!-- ══════════════════════════════════════════════════════════════════════════ -->
+
     <!-- Sidebar overlay â€” shown only on mobile when sidebar is open -->
     <div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
@@ -1025,7 +1069,7 @@
     </div>
     <!-- ════════════════════════════════════════════════════════ -->
 
-    <script src="app.js?v=24"></script>
+    <script src="app.js?v=31"></script>
 </body>
 </html>
 
